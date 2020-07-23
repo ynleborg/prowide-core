@@ -1,18 +1,23 @@
-/*******************************************************************************
- * Copyright (c) 2016 Prowide Inc.
+/*
+ * Copyright 2006-2018 Prowide
  *
- *     This program is free software: you can redistribute it and/or modify
- *     it under the terms of the GNU Lesser General Public License as 
- *     published by the Free Software Foundation, either version 3 of the 
- *     License, or (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *     This program is distributed in the hope that it will be useful,
- *     but WITHOUT ANY WARRANTY; without even the implied warranty of
- *     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  
- *     
- *     Check the LGPL at <http://www.gnu.org/licenses/> for more details.
- *******************************************************************************/
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.prowidesoftware.swift.model;
+
+import com.prowidesoftware.deprecation.DeprecationUtils;
+import com.prowidesoftware.deprecation.ProwideDeprecated;
+import com.prowidesoftware.deprecation.TargetYear;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -23,15 +28,19 @@ import java.util.List;
  * These structures are modeled here as a tree.
  * 
  * @since 6.3
+ * @deprecated to retrieve fields in sequences use the AbstractMT model
  */
+@Deprecated
+@ProwideDeprecated(phase3 = TargetYear.SRU2020)
 public class SequenceNode {
 	private final String name;
-	private final List<SequenceNode> children = new ArrayList<SequenceNode>();
+	private final List<SequenceNode> children = new ArrayList<>();
 	private final SequenceNode parent;
 	
 	private SequenceNode(final String name, final SequenceNode parent) {
 		this.name = name;
 		this.parent = parent;
+		DeprecationUtils.phase2(getClass(), "getParsedSequences()", "This is part of an discarded attempt to provide a structured model in the SwiftMessage object, it is still kept for backward compatibility but should not be used");
 	}
 	
 	/**
@@ -62,4 +71,9 @@ public class SequenceNode {
 	public SequenceNode getParent() {
 		return parent;
 	}
+
+	public List<SequenceNode> getChildren() {
+		return children;
+	}
+
 }

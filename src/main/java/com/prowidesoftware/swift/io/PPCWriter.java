@@ -1,17 +1,18 @@
-/*******************************************************************************
- * Copyright (c) 2016 Prowide Inc.
+/*
+ * Copyright 2006-2018 Prowide
  *
- *     This program is free software: you can redistribute it and/or modify
- *     it under the terms of the GNU Lesser General Public License as 
- *     published by the Free Software Foundation, either version 3 of the 
- *     License, or (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *     This program is distributed in the hope that it will be useful,
- *     but WITHOUT ANY WARRANTY; without even the implied warranty of
- *     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  
- *     
- *     Check the LGPL at <http://www.gnu.org/licenses/> for more details.
- *******************************************************************************/
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.prowidesoftware.swift.io;
 
 import java.io.File;
@@ -20,7 +21,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.io.Writer;
 
-import org.apache.commons.lang.Validate;
+import org.apache.commons.lang3.Validate;
 
 import com.prowidesoftware.swift.model.mt.AbstractMT;
 
@@ -37,6 +38,7 @@ import com.prowidesoftware.swift.model.mt.AbstractMT;
  * TODO: Use SwiftMessageFactory to create and prepend the ACK here
  */
 public class PPCWriter extends AbstractWriter {
+	private static int SECTOR = 512;
 
 	/**
 	 * Constructs a PPCWriter to write content into a given Writer instance.
@@ -117,14 +119,23 @@ public class PPCWriter extends AbstractWriter {
     	writer.write(PPCReader.BEGIN);
     	writer.write(msg);
     	writer.write(PPCReader.END);
-    	/*
-    	 * pad to fill sector length
-    	 */
+
+    	// pad to fill sector length
     	int length = msg.length() + 2; 
-    	int pad = length > 512? length % 512 : 512 - length;
+    	int pad = requiredPadding(length);
     	for (int i=0; i<pad; i++) {
     		writer.write(PPCReader.EMPTY);
     	}  
     }
+
+	/**
+	 * Computes the padding to match the sector multiple
+	 * Thanks https://github.com/safet-habibija for the fix
+	 * @param length current message length
+	 * @return number of empty characters to append as padding
+	 */
+	private static int requiredPadding(int length) {
+		return (SECTOR - (length % SECTOR)) % SECTOR;
+	}
 
 }

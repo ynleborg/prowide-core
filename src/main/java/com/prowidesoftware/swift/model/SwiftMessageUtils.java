@@ -1,37 +1,38 @@
-/*******************************************************************************
- * Copyright (c) 2016 Prowide Inc.
+/*
+ * Copyright 2006-2018 Prowide
  *
- *     This program is free software: you can redistribute it and/or modify
- *     it under the terms of the GNU Lesser General Public License as 
- *     published by the Free Software Foundation, either version 3 of the 
- *     License, or (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *     This program is distributed in the hope that it will be useful,
- *     but WITHOUT ANY WARRANTY; without even the implied warranty of
- *     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  
- *     
- *     Check the LGPL at <http://www.gnu.org/licenses/> for more details.
- *******************************************************************************/
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.prowidesoftware.swift.model;
 
-import java.lang.reflect.Method;
-import java.util.ArrayList;
-import java.util.Calendar;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-
-import org.apache.commons.lang.StringUtils;
-import org.apache.commons.lang.Validate;
-
-import com.prowidesoftware.swift.WifeException;
+import com.prowidesoftware.ProwideException;
+import com.prowidesoftware.swift.io.writer.SwiftWriter;
 import com.prowidesoftware.swift.model.field.CurrencyContainer;
 import com.prowidesoftware.swift.model.field.DateContainer;
 import com.prowidesoftware.swift.model.field.Field;
+import com.prowidesoftware.swift.model.field.Field30T;
 import com.prowidesoftware.swift.model.mt.AbstractMT;
+import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.Validate;
+
+import java.io.StringWriter;
+import java.lang.reflect.Method;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.*;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * Utility methods that provide higher level access to {@link SwiftMessage}
@@ -57,16 +58,16 @@ public class SwiftMessageUtils {
 
 	/**
 	 * Mirrors logic on {@link CurrencyContainer#currencyStrings()} including all fields
-	 * @param m
+	 * @param m the message instance
 	 * @return an empty list if none found
 	 */
 	public static List<String> currencyStrings(final SwiftMessage m) {
 		if (m != null) {
 			final SwiftBlock4 b4 = m.getBlock4();
 			if (b4 != null && !b4.isEmpty()) {
-				final ArrayList<String> curs = new ArrayList<String>();
+				final ArrayList<String> curs = new ArrayList<>();
 				for(final Tag t: b4.getTags()) {
-					final Field f = t.getField();
+					final Field f = t.asField();
 					if (f instanceof CurrencyContainer) {
 						final CurrencyContainer cc = (CurrencyContainer) f;
 						curs.addAll(cc.currencyStrings());
@@ -89,7 +90,7 @@ public class SwiftMessageUtils {
 	/**
 	 * Iterates through the parameter tags and removes all inner blocks enclosed between
 	 * sequences boundary fields 16R and 16S
-	 * <br />
+	 * <br>
 	 * This method requires a sequence starting with 16R and ending with 16S, so first
 	 * and last tags must be those. Due to this constraint, null, empty and sequences with less 
 	 * than 3 tags will be returned without any modification.
@@ -99,7 +100,7 @@ public class SwiftMessageUtils {
 	 * @throws IllegalArgumentException if the starting tag is not 16R or the ending tag is not the matching 16S
 	 * @since 7.8.1
 	 */
-	public static SwiftTagListBlock removeInnerSequences(final SwiftTagListBlock sequence) {
+	public static SwiftTagListBlock removeInnerSequences(final SwiftTagListBlock sequence) throws IllegalArgumentException {
 		if (sequence == null || sequence.size() < 3) {
 			return sequence;
 		}
@@ -112,7 +113,7 @@ public class SwiftMessageUtils {
 			throw new IllegalArgumentException("Ending tag of sequence must be 16S (and was "+end.getName()+")");
 		}
 		if (!StringUtils.equals(start.getValue(), end.getValue())) {
-			throw new IllegalArgumentException("Qualifier of last 16S ("+end.getValue()+") must match the qualifier of the starting ("+start.getValue()+") 16R tag");
+			throw new IllegalArgumentException("The qualifier of the starting block "+start+" must match the qualifier of the ending block "+end);
 		}
 		final SwiftTagListBlock result = new SwiftTagListBlock();
 		String qualifier = null;
@@ -136,16 +137,16 @@ public class SwiftMessageUtils {
 	}
 
 	/**
-	 * Gets the value date of a message.<br /><br />
+	 * Gets the value date of a message.
 	 *
-	 * The value date is meaningful and defined by the standard only for a subset of message types.
+	 * <p>The value date is meaningful and defined by the standard only for a subset of message types.
 	 * In most of the cases it is contained in the date subfield of field 32A (for example MT103)
-	 * or field 30 (for example MT101).<br />
+	 * or field 30 (for example MT101).
 	 *
-	 * Notice a lot of messages do not define a value date.<br />
+	 * <p>Notice a lot of messages do not define a value date.
 	 *
-	 * Also a few define several fields as value date, or the value date can be repeated.
-	 * for those messages the first one is returned as follows:<br />
+	 * <p>Also a few define several fields as value date, or the value date can be repeated.
+	 * for those messages the first one is returned as follows:<br>
 	 * <ul>
 	 * <li>For MT450 returns the first value date occurrence of field 32A</li>
 	 * <li>For MT455 returns the value date from field 32A (not from 33[C,D])</li>
@@ -154,7 +155,7 @@ public class SwiftMessageUtils {
 	 * </ul>
 	 *
 	 * @param m the message where the value date is to be found
-	 * @return found date or <code>null</code> if the message does not defines a value date, or if the defined value date field is not present in the message
+	 * @return found date or null if the message does not defines a value date, or if the defined value date field is not present in the message
 	 * @since 7.7
 	 */
 	public static Calendar valueDate(final SwiftMessage m) {
@@ -163,13 +164,30 @@ public class SwiftMessageUtils {
 			if (b4 != null && !b4.isEmpty()) {
 				Tag t = null;
 				Field f = null;
-				if (m.isType(101, 104, 107, 201, 203, 204, 207, 210)) {
+				if (m.isType(101, 104, 107, 201, 203, 204, 207, 210, 604,605)) {
 					t = b4.getTagByName("30");
 				} else if (m.isType(102, 103, 200, 202, 205, 400, 450, 455, 800, 802, 900, 910)) {
 					t = b4.getTagByName("32A");
-				} else if (m.isType(456)) {
+				} else if (m.isType(300, 304, 320, 330, 350, 620)) {
+					t = b4.getTagByName("30V");
+                } else if (m.isType(370)) {
+                    final SwiftTagListBlock seq = b4.getSubBlock("NETPOS");
+                    if (seq != null) {
+                        f = seq.getFieldByNumber(98, "NETT");
+                    }
+                } else if (m.isType(456)) {
 					t = b4.getTagByName("33D");
-				} else if (m.isType(513)) {
+				} else if (m.isType(502)) {
+                    final SwiftTagListBlock seq = b4.getSubBlock("AMT");
+                    if (seq != null) {
+                        f = seq.getFieldByNumber(98, "VALU");
+                    }
+                } else if (m.isType(509)) {
+                    final SwiftTagListBlock seq = b4.getSubBlock("TRADE");
+                    if (seq != null) {
+                        f = seq.getFieldByNumber(98, "SETT");
+                    }
+                } else if (m.isType(513)) {
 					final SwiftTagListBlock seq = b4.getSubBlock("ORDRDET");
 					if (seq != null) {
 						f = seq.getFieldByNumber(98, "SETT");
@@ -179,12 +197,27 @@ public class SwiftMessageUtils {
 					if (seq != null) {
 						f = seq.getFieldByNumber(98, "SETT");
 					}
-				} else if (m.isType(541, 543, 545, 547)) {
+				} else if (m.isType(540, 541, 542, 543, 544, 545, 546, 547, 586)) {
 					final SwiftTagListBlock seq = b4.getSubBlock("TRADDET");
 					if (seq != null) {
 						f = seq.getFieldByNumber(98, "SETT");
-					}
-				} else if (m.isType(564)) {
+					} else {
+                        final SwiftTagListBlock seq2 = b4.getSubBlock("AMT");
+                        if (seq2 != null) {
+                            f = seq2.getFieldByNumber(98, "VALU");
+                        }
+                    }
+				} else if (m.isType(537)) {
+                    final SwiftTagListBlock seq = b4.getSubBlock("TRANSDET");
+                    if (seq != null) {
+                        f = seq.getFieldByNumber(98, "EXSE");
+                    }
+                } else if (m.isType(548)) {
+                    final SwiftTagListBlock seq = b4.getSubBlock("SETTRAN");
+                    if (seq != null) {
+                        f = seq.getFieldByNumber(70, "SPRO");
+                    }
+                } else if (m.isType(564)) {
 					final SwiftTagListBlock seq = b4.getSubBlock("CASHMOVE");
 					if (seq != null) {
 						f = seq.getFieldByNumber(98, "PAYD");
@@ -200,9 +233,11 @@ public class SwiftMessageUtils {
 					t = b4.getTagByName("33A");
 				} else if (m.isType(742, 754)) {
 					t = b4.getTagByName("34A");
+				} else if (m.isType(942, 950, 970, 972)){
+					t = b4.getTagByName("61");
 				}
 				if (t != null) {
-					f = t.getField();
+					f = t.asField();
 				}
 				if (f != null && f instanceof DateContainer) {
 					return ((DateContainer) f).dates().get(0);
@@ -213,13 +248,105 @@ public class SwiftMessageUtils {
 	}
 
 	/**
-	 * Proprietary checksum for message integrity verification.
-	 * Please notice this is not the SWIFT trailer CHK field.
-	 * @param model
-	 * @return always null (this method is not yet implemented)
+	 * Gets the trade date of a message.
+	 *
+	 * <p>The implementation tries first to get the trade date from field 30T (present in many
+	 * category 3 messages) and if not found it tries to get the trade date from field 98a::TRAD
+	 * (present in many category 5 messages).
+	 *
+	 * <p>Notice a lot of messages do not define a trade date.
+	 *
+	 * @param m the message where the value date is to be found
+	 * @return found date or null if the message does not defines a trade date, or if the defined trade date field is not present in the message
+	 * @since 7.10.4
+	 */
+	public static Calendar tradeDate(final SwiftMessage m) {
+		if (m != null) {
+			final SwiftBlock4 b4 = m.getBlock4();
+			if (b4 != null && !b4.isEmpty()) {
+
+				Field f = m.getBlock4().getFieldByName(Field30T.NAME);
+				if (f == null) {
+					f = m.getBlock4().getFieldByNumber(98, "TRAD");
+				}
+				if (f != null && f instanceof DateContainer) {
+					return ((DateContainer) f).dates().get(0);
+				}
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * Proprietary checksum for message integrity verification or duplicates detection.
+	 * <p>Please notice <strong>this is not the SWIFT trailer CHK field</strong>.
+	 * <p>The implementation computes an MD5 on the complete message in FIN format. The result hash
+	 * is a 32 character string, you may consider encoding it with base64 on top to have the same 
+	 * information stored in 22 characters.
+	 *
+	 * @param model the message
+	 * @return computed hash or null if errors occurred during computation or the message is null
 	 */
 	public static String calculateChecksum(final SwiftMessage model) {
-		//TODO missing implementation
+		if (model != null) {
+			final StringWriter writer = new StringWriter();
+			SwiftWriter.writeMessage(model, writer, true);
+			final String fin = writer.getBuffer().toString();
+			return md5(fin);
+		} else {
+			return null;
+		}
+	}
+
+	/**
+	 * Proprietary checksum for message text block (block 4) integrity verification or duplicates detection
+	 * <p>Please notice <strong>this is not the SWIFT trailer CHK field</strong>.
+	 * <p>The implementation computes an MD5 on the complete message in FIN format. The result hash
+	 * is a 32 character string, you may consider encoding it with base64 on top to have the same 
+	 * information stored in 22 characters.
+	 *
+	 * @param b4 the message text block
+	 * @return computed hash or null if errors occurred during computation or the block is null
+	 * @since 7.9.5
+	 */
+	public static String calculateChecksum(final SwiftBlock4 b4) {
+		if (b4 != null) {
+			final StringWriter writer = new StringWriter();
+			SwiftWriter.writeBlock4(b4, writer);
+			final String fin = writer.getBuffer().toString();
+			return md5(fin);
+		} else {
+			return null;
+		}
+	}
+	
+	/**
+	 * Computes an MD5 hash on the parameter text
+	 * @param text the text to hash
+	 * @return computed hash or null if exceptions are thrown reading bytes or processing the digest
+	 * @since 7.9.5
+	 */
+	//TODO add base 64 encoding on top when upgraded to Java 8
+	private static String md5(final String text) {
+		try {
+			byte[] bytesOfMessage = text.getBytes(StandardCharsets.UTF_8);
+			MessageDigest md = MessageDigest.getInstance("MD5");
+			byte[] thedigest = md.digest(bytesOfMessage);
+
+			//Converting the bytes to a Hex string
+			StringBuilder buff = new StringBuilder();
+			for (byte b : thedigest) {
+				String conversion = Integer.toString(b & 0xFF,16);
+				while (conversion.length() < 2) {
+					conversion = "0" + conversion;
+				}
+				buff.append(conversion);
+			}
+
+			return buff.toString();
+		} catch (NoSuchAlgorithmException e) {
+			log.log(Level.FINEST, e.getMessage(), e);
+		}
 		return null;
 	}
 
@@ -231,7 +358,7 @@ public class SwiftMessageUtils {
 		if (msg != null && msg.getBlock4() != null) {
 			return splitByField15(msg.getBlock4());
 		} else {
-			return new HashMap<String, SwiftTagListBlock>();
+			return new HashMap<>();
 		}
 	}
 
@@ -243,7 +370,7 @@ public class SwiftMessageUtils {
 	 * @since 7.7
 	 */
 	public static Map<String, SwiftTagListBlock> splitByField15(final SwiftTagListBlock block) {
-		final Map<String, SwiftTagListBlock> result = new HashMap<String, SwiftTagListBlock>();
+		final Map<String, SwiftTagListBlock> result = new HashMap<>();
 		if (block != null) {
 			SwiftTagListBlock currentList = null;
 			for (final Tag t : block.getTags()) {
@@ -287,7 +414,7 @@ public class SwiftMessageUtils {
 	public static List<SwiftTagListBlock> splitByField15(final SwiftTagListBlock block, final String letterOption) {
 		Validate.notNull(letterOption);
 		Validate.isTrue(StringUtils.length(letterOption) == 1, "letter option must be only one character");
-		final List<SwiftTagListBlock> result = new ArrayList<SwiftTagListBlock>();
+		final List<SwiftTagListBlock> result = new ArrayList<>();
 		if (block != null) {
 			SwiftTagListBlock currentList = null;
 			for (final Tag t : block.getTags()) {
@@ -313,9 +440,9 @@ public class SwiftMessageUtils {
 
 	/**
 	 * Gets the message reference from field 20 (if present) or from field 20C:SEME if message category is 5.
-	 * For system messages returns the value of the MUR (108) field, if present.
+	 * If no Field20 or 20C are found and MUR is present, returns the MUR value (field 108 from block 3).
 	 * @param m the message where the reference is to be found
-	 * @return found reference or <code>null</code> if the message does not defines a reference, or if the defined reference field is not present in the message
+	 * @return found reference or null if the message does not defines a reference, or if the defined reference field is not present in the message
 	 * @since 7.8
 	 */
 	public static String reference(final SwiftMessage m) {
@@ -354,15 +481,14 @@ public class SwiftMessageUtils {
 	/**
 	 * Joins all the given sequences in one single list.
 	 *  
-	 * @param sequences the sequences to be joined. Can be <code>null</code> or empty, in which case this method returns {@link SwiftTagListBlock#EMPTY_LIST}
+	 * @param sequences the sequences to be joined. Can be null or empty, in which case this method returns {@link SwiftTagListBlock#EMPTY_LIST}
 	 * @return a single {@link SwiftTagListBlock} containing all elements in order of each of the given sequences or {@link SwiftTagListBlock#EMPTY_LIST} if sequences is null or empty
 	 * @since 7.8
 	 */
 	public static SwiftTagListBlock join(final List<? extends SwiftTagListBlock> sequences) {
-		if (sequences == null || sequences.isEmpty())
+		if (sequences == null || sequences.isEmpty()) {
 			return SwiftTagListBlock.EMPTY_LIST;
-		
-		
+		}
 		final SwiftTagListBlock result = new SwiftTagListBlock();
 		for (final SwiftTagListBlock b : sequences) {
 			result.getTags().addAll(b.getTags());
@@ -405,7 +531,7 @@ public class SwiftMessageUtils {
 	 * @return the SwiftTagListBlock containing all parent sequences, the sequence requested and the contents
 	 * @since 7.8
 	 */
-	public static final SwiftTagListBlock createSubsequenceWithParents(final Class<? extends AbstractMT> mt, final String sequenceName, final Tag ... tags ) {
+	public static SwiftTagListBlock createSubsequenceWithParents(final Class<? extends AbstractMT> mt, final String sequenceName, final Tag ... tags ) {
 		log.finer("Create sequence "+sequenceName);
 		final SwiftTagListBlock result = new SwiftTagListBlock();
 		result.append(tags);
@@ -427,40 +553,41 @@ public class SwiftMessageUtils {
 			final Method method = subSequenceClass.getMethod("newInstance", Tag[].class);
 			return (SwiftTagListBlock) method.invoke(null, new Object[]{tags});
 		} catch (Exception e) {
-			log.log(Level.WARNING, "Reflection error: mt="+mt.getName()+", sequenceName="+sequenceName+", tags="+tags+" - "+e, e);
-			throw new WifeException("Reflection error: mt="+mt.getName()+", sequenceName="+sequenceName+", tags="+tags+" - "+e);
+			String message = "Reflection error: mt="+mt.getName()+", sequenceName="+sequenceName+", tags="+ Arrays.toString(tags) +" - " + e.getMessage();
+			log.log(Level.WARNING, message, e);
+			throw new ProwideException(message);
 		}
 	}
 	
 	/**
 	 * Gets the message main amount
-	 * @see #currencyAmount(SwiftMessage)
-	 * @since 7.8.8
+	 * @see #money(SwiftMessage)
+	 * @since 8.0.1
 	 */
-	protected CurrencyAmount currencyAmount() {
-		return currencyAmount(msg);
+	protected Money money() {
+		return money(msg);
 	}
 	
 	/**
-	 * Gets the message main amount<br />
+	 * Gets the message main amount
 	 *
 	 * <p>The amount is meaningful and defined by the standard only for a subset of message types.
 	 * In most of the cases it is contained in the currency and amount subfields of fields 32a 
-	 * in payments messages and 19A in securities.</p>
+	 * in payments messages and 19A in securities.
 	 *
 	 * This implementation is a work in progress and the interpretation of which field is consider
 	 * the main amount for each message type may change from time to time adding more cases or 
 	 * even changing the used field.
 	 * 
 	 * @param m a message with some amount field
-	 * @return the currency and amount object extracted from the message or <code>null</code> if non is present or cannot be created from its fields
-	 * @since 7.8.8
+	 * @return the currency and amount object extracted from the message or null if non is present or cannot be created from its fields
+	 * @since 8.0.1
 	 */
 	/*
 	 * Do not use API from MTs and Field classes here to avoid cyclic dependency in code generation.
 	 * Keep in sync special case for 104 and 107 with MT104 and MT107 getSequenceC logic.
 	 */
-	static final CurrencyAmount currencyAmount(final SwiftMessage m) {
+	public static Money money(final SwiftMessage m) {
 		if (m == null || m.isServiceMessage21()) {
 			return null;
 		}
@@ -468,176 +595,57 @@ public class SwiftMessageUtils {
 		if (b4 == null || b4.isEmpty()) {
 			return null;
 		}
-		/*
-		The following amount per MT cases need to be reviewed
-		
-        300 B2 {"33B"}
-        300 D1 {"32B"}
-        300 B1 {"32B"}
-        
-        303 B {"32B", "33B"}
-        303 C {"32B", "33B", "34B"}
-        303 D2 {"33B"}
-        303 D3 {"34B"}
-        303 D1 {"32B"}
-        
-        304 D {"32G", "34B"}
-        304 E {"32G"}
-        304 B2 {"33B"}
-        304 B1 {"32B"}
-        
-        305 A {"32B", "33B", "34P", "34R"}
-        
-        306 D {"32B", "33B"}
-        306 L1 {"32H"}
-        306 E {"33E"}
-        306 B1 {"34B"}
-        
-        307 D {"19B"}
-        307 C {"19B"}
-        
-        320 G {"33B", "33E"}
-        320 B {"32B", "32H", "34E"}
-        320 I1 {"32H"}
-        
-        321 B {"19A"}
-        
-        330 G {"33B", "33E"}
-        330 B {"32B", "32H", "34E"}
-        
-        362 D {"33F", "32H", "33E"}
-        362 E1 {"32M"}
-        362 B {"33F", "32H"}
-        362 C1 {"32M"}
-        
-        535 B1b1 {"19A"}
-        535 B1b {"19A"}
-        535 B1c {"19A"}
-        535 C {"19A"}
-        535 B1 {"19A"}
-
-		509 B {"19A"}
-		
-        536 B1a2 {"19A"}
-        
-        537 B2b {"19A"}
-        
-        540 D {"19A"}
-        540 E3 {"19A"}
-        
-        541 D {"19A"}
-        541 E3 {"19A"}
-        
-        542 D {"19A"}
-        542 E3 {"19A"}
-        
-        543 D {"19A"}
-        543 E3 {"19A"}
-        
-        544 D {"19A"}
-        544 E3 {"19A"}
-        544 C {"19A"}
-        
-        545 D {"19A"}
-        545 E3 {"19A"}
-        545 C {"19A"}
-        
-        546 D {"19A"}
-        546 E3 {"19A"}
-        546 C {"19A"}
-        
-        547 D {"19A"}
-        547 E3 {"19A"}
-        547 C {"19A"}
-        
-        548 B {"19A"}
-        
-        558 D {"19A"}
-        558 A {"19A"}
-        558 B {"19A"}
-        558 C {"19A"}
-        
-        559 _A {"32M", "32G", "34A"}
-        559 main {"19"}
-        
-        564 E2 {"19B"}
-        
-        566 D2 {"19B"}
-        
-        567 B {"19B"}
-        
-        569 D {"19A"}
-        569 B {"19A"}
-        569 C {"19A"}
-        569 C1a1 {"19A"}
-        569 C1 {"19A"}
-        569 C1a {"19A"}
-        
-        574_IRSLSTB2 {"19A"}
-        
-        575 B1a2 {"19A"}
-        575 B1a3 {"19A"}
-        
-        576 B2 {"19A"}
-        
-        578 D {"19A"}
-        578 E3 {"19A"}
-               
-        586 B4 {"19A"}
-        586 B5b {"19A"}
-        
-        609 _A1 {"68B", "68C"}
-        */
 		if (m.isType(102, 103, 200, 202, 205, 256, 450, 455, 643, 644, 646, 734, 802, 900, 910)) {
-			//for 646 will pick the first one, from sequence A,ignoring the 32A from sequence C
-			return CurrencyAmount.of(b4.getFieldByName("32A"));
-		} else if (m.isType(191, 291, 391, 491, 591, 691, 791, 891, 991, 340, 341, 350, 360, 361, 364, 365, 620, 700, 705, 710, 720, 732, 740, 742, 756)) {
-			return CurrencyAmount.of(b4.getFieldByName("32B"));
-		} else if (m.isType(370, 508)) {
-			return CurrencyAmount.of(b4.getFieldByName("19A"));
-		} else if (m.isType(581, 707, 747)) {
-			return CurrencyAmount.of(b4.getFieldByName("34B"));
-		} else if (m.isType(380, 381, 505)) {
-			 //for 505 will pick the first found, that will be from the cash collateral details or from other collateral details
-			return CurrencyAmount.of(b4.getFieldByName("19B"));
+			return Money.of(b4.getFieldByName("32A"));
+		} else if (m.isType(191, 291, 300, 304, 305, 320, 391, 491, 591, 691, 791, 891, 991, 340, 341, 350, 360, 361, 364, 365, 620, 700, 705, 710, 720, 732, 740, 742, 756)) {
+			return Money.of(b4.getFieldByName("32B"));
+		} else if (m.isType(321, 370, 508, 509, 535, 536, 537, 540, 541, 542, 543, 544, 545, 546, 547, 548, 558, 559, 569, 574, 575, 576, 578, 586)) {
+			return Money.of(b4.getFieldByName("19A"));
+		} else if (m.isType(330, 362)) {
+			return Money.of(b4.getFieldByName("32H"));
+		} else if (m.isType(306, 581, 707, 747)) {
+			return Money.of(b4.getFieldByName("34B"));
+		} else if (m.isType(380, 381, 505, 564, 566, 567)) {
+			return Money.of(b4.getFieldByName("19B"));
 		} else if (m.isType(800)) {
-			return CurrencyAmount.of(b4.getFieldByName("33B"));
+			return Money.of(b4.getFieldByName("33B"));
 		} else if (m.isType(941)) {
-			return CurrencyAmount.of(b4.getFieldByName("62F"));
+			return Money.of(b4.getFieldByName("62F"));
 
 		} else if (m.isType(600, 601)) {
-			return CurrencyAmount.ofAny(b4, "34P", "34R");
+			return Money.ofAny(b4, "34P", "34R");
+		} else if (m.isType(609)) {
+			return Money.ofAny(b4, "68B", "68C");
 		} else if (m.isType(111, 112, 516, 649) || m.isType(754)) {
-			return CurrencyAmount.ofAny(b4, "32A", "32B");
+			return Money.ofAny(b4, "32A", "32B");
 		} else if (m.isType(190, 290, 390, 490, 590, 690, 790, 890, 990)) {
-			return CurrencyAmount.ofAny(b4, "32C", "32D");
+			return Money.ofAny(b4, "32C", "32D");
 		} else if (m.isType(730) || m.isType(768)) {
-			return CurrencyAmount.ofAny(b4, "32B", "32D");
+			return Money.ofAny(b4, "32B", "32D");
 		} else if (m.isType(400, 410)) {
-			return CurrencyAmount.ofAny(b4, "32A", "32B", "32K");
+			return Money.ofAny(b4, "32A", "32B", "32K");
 		} else if (m.isType(430)) {
-			return CurrencyAmount.ofAny(b4, "33A", "33K", "32A", "32K");
+			return Money.ofAny(b4, "33A", "33K", "32A", "32K");
 		} else if (m.isType(750)) {
-			return CurrencyAmount.ofAny(b4, "34B", "32B");
+			return Money.ofAny(b4, "34B", "32B");
 		} else if (m.isType(752)) {
-			return CurrencyAmount.ofAny(b4, "33A", "33B", "32B");
+			return Money.ofAny(b4, "33A", "33B", "32B");
 		} else if (m.isType(769)) {
-			return CurrencyAmount.ofAny(b4, "32B", "32D", "33B", "34B");
+			return Money.ofAny(b4, "32B", "32D", "33B", "34B");
 		} else if (m.isType(940, 950, 970)) {
-			return CurrencyAmount.ofAny(b4, "62F", "62M");
-	    	
+			return Money.ofAny(b4, "62F", "62M");
 		} else if (m.isType(101, 201, 203, 204, 207, 210)) {
-			return CurrencyAmount.ofSum(b4.getFieldsByName("32B"));
+			return Money.ofSum(b4.getFieldsByName("32B"));
 		} else if (m.isType(110, 416, 420, 422, 456)) {
-			return CurrencyAmount.ofSum(b4.getFieldsByName("32a"));
+			return Money.ofSum(b4.getFieldsByName("32a"));
 		} else if (m.isType(509)) {
-			return CurrencyAmount.ofSum(b4.getFieldsByName("19A"));
+			return Money.ofSum(b4.getFieldsByName("19A"));
 		} else if (m.isType(112)) {
-			return CurrencyAmount.ofSum(b4.getFieldsByName("32A"));
+			return Money.ofSum(b4.getFieldsByName("32A"));
 		} else if (m.isType(801)) {
-			return CurrencyAmount.ofSum(b4.getFieldsByName("33B"));
+			return Money.ofSum(b4.getFieldsByName("33B"));
 		} else if (m.isType(824)) {
-			return CurrencyAmount.ofSum(b4.getFieldsByName("68A"));
+			return Money.ofSum(b4.getFieldsByName("68A"));
 			
 		} else if (m.isType(104, 107)) {
 			// we pick field 32B from sequence C
@@ -648,7 +656,7 @@ public class SwiftMessageUtils {
 				if (startIndexOfC >= 0) {
 					Tag t = b4.getTags().get(startIndexOfC);
 					if (t != null) {
-						return CurrencyAmount.of(t.asField());
+						return Money.of(t.asField());
 					}
 				}
 			}
@@ -660,7 +668,7 @@ public class SwiftMessageUtils {
 			 */
 			SwiftTagListBlock seq = b4.getSubBlock("ORDRDET");
 			if (seq != null) {
-				return CurrencyAmount.of(seq.getFieldByName("19A"));
+				return Money.of(seq.getFieldByName("19A"));
 			}
 		
 		} else if (m.isType(514, 515, 518)) {
@@ -670,7 +678,7 @@ public class SwiftMessageUtils {
 			 */
 			SwiftTagListBlock seq = b4.getSubBlock("CONFDET");
 			if (seq != null) {
-				return CurrencyAmount.of(seq.getFieldByName("19A"));
+				return Money.of(seq.getFieldByName("19A"));
 			}
 			
 		} else if (m.isType(503, 504, 506)) {
@@ -679,7 +687,7 @@ public class SwiftMessageUtils {
 			 */
 			SwiftTagListBlock seq = b4.getSubBlock("SUMM");
 			if (seq != null) {
-				return CurrencyAmount.of(seq.getFieldByName("19B"));
+				return Money.of(seq.getFieldByName("19B"));
 			}
 			
 		} else if (m.isType(527)) {
@@ -688,7 +696,7 @@ public class SwiftMessageUtils {
 			 */
 			SwiftTagListBlock seq = b4.getSubBlock("DEALTRAN");
 			if (seq != null) {
-				return CurrencyAmount.of(seq.getFieldByName("19A"));
+				return Money.of(seq.getFieldByName("19A"));
 			}
 		}
 		

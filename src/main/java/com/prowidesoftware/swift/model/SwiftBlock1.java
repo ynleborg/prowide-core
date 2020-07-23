@@ -1,25 +1,29 @@
-/*******************************************************************************
- * Copyright (c) 2016 Prowide Inc.
+/*
+ * Copyright 2006-2018 Prowide
  *
- *     This program is free software: you can redistribute it and/or modify
- *     it under the terms of the GNU Lesser General Public License as 
- *     published by the Free Software Foundation, either version 3 of the 
- *     License, or (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *     This program is distributed in the hope that it will be useful,
- *     but WITHOUT ANY WARRANTY; without even the implied warranty of
- *     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  
- *     
- *     Check the LGPL at <http://www.gnu.org/licenses/> for more details.
- *******************************************************************************/
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.prowidesoftware.swift.model;
 
-import java.io.Serializable;
-import java.util.logging.Level;
-
-import org.apache.commons.lang.Validate;
-
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import com.prowidesoftware.swift.model.mt.ServiceIdType;
+import org.apache.commons.lang3.Validate;
+
+import java.io.Serializable;
+import java.util.Arrays;
+import java.util.Objects;
+import java.util.logging.Level;
 
 /**
  * Base class for SWIFT <b>Basic Header Block (block 1)</b>.
@@ -175,6 +179,15 @@ public class SwiftBlock1 extends SwiftValueBlock implements Serializable {
 	}
 
 	/**
+	 * Copy constructor
+	 * @param block an existing block1 to copy
+	 * @since 7.10.4
+	 */
+	public SwiftBlock1(SwiftBlock1 block) {
+		this(block.getApplicationId(), block.getServiceId(), block.getLogicalTerminal(), block.getSessionNumber(), block.getSequenceNumber());
+	}
+
+	/**
 	 * Sets the block number.
 	 * @param blockNumber the block number to set
 	 * @throws IllegalArgumentException if parameter blockName is not the integer 1
@@ -184,7 +197,7 @@ public class SwiftBlock1 extends SwiftValueBlock implements Serializable {
 
 		// sanity check
 		Validate.notNull(blockNumber, "parameter 'blockNumber' cannot be null");
-		Validate.isTrue(blockNumber.intValue() == 1, "blockNumber must be 1");
+		Validate.isTrue(blockNumber == 1, "blockNumber must be 1");
 	}
 
 	/**
@@ -205,7 +218,7 @@ public class SwiftBlock1 extends SwiftValueBlock implements Serializable {
 	 * @return Integer containing the block's number
 	 */
 	public Integer getNumber() {
-		return new Integer(1);
+		return 1;
 	}
 
 	/**
@@ -253,19 +266,24 @@ public class SwiftBlock1 extends SwiftValueBlock implements Serializable {
 	}
 
 	/**
-	 * Sets the The Logical Terminal address with the parameter as it is given.
+	 * Sets the The Logical Terminal address with the parameter as it is given without any modification.
 	 * 
-	 * @param logicalTerminal it is fixed at 12 characters; it must not have X in position 9 (padded with "X" if no branch is required).
+	 * <p>Beware for an outgoing message the LT identifier cannot be X and the branch code must be padded with XXX if not present in
+	 * the BIC address. The complete logical terminal address must always be a 12 characters length alphanumeric string
+	 * 
+	 * @param logicalTerminal should be a fixed at 12 character length string; with the BIC address, LT identifier and branch code.
 	 */
 	public void setLogicalTerminal(final String logicalTerminal) {
 		this.logicalTerminal = logicalTerminal;
 	}
 	
 	/**
-	 * Sets the LT address.<br />
+	 * Sets the LT address.<br>
+	 * 
+	 * <p>The implementation assumes the message is outgoing, and will tamper the LT identifier if necessary (changing an "X" LT identifier by and "A").
 	 * @see LogicalTerminalAddress#getSenderLogicalTerminalAddress()
 	 * 
-	 * @param logicalTerminal
+	 * @param logicalTerminal the logical terminal address to set
 	 * @since 7.6
 	 */
 	public void setLogicalTerminal(final LogicalTerminalAddress logicalTerminal) {
@@ -273,10 +291,10 @@ public class SwiftBlock1 extends SwiftValueBlock implements Serializable {
 	}
 	
 	/**
-	 * Creates and sets a full LT address using the parameter BIC code and a default LT identifier.
-	 * 
+	 * Sets the logical terminal address from the parameter BIC code with "A" as default LT identifier and XXX as default branch code.
 	 * @see #setLogicalTerminal(LogicalTerminalAddress)
-	 * @param bic
+	 * 
+	 * @param bic a BIC code
 	 * @since 7.6
 	 */
 	public void setLogicalTerminal(final BIC bic) {
@@ -284,10 +302,12 @@ public class SwiftBlock1 extends SwiftValueBlock implements Serializable {
 	}
 
 	/**
-	 * Completes if necessary and sets the LT address.<br />
- 	 * The sender addresses will be filled with proper default LT identifier and branch codes if not provided.
-	 * 
+	 * Sets the logical terminal address from the parameter BIC.
+	 * <p>If the LT identifier is not provided, "A" will be set as default. If the branch code is not provided XXX will be used as default.
+	 * <p>The implementation assumes the message is outgoing, and if the full logical terminal address is provided with an "X" as LT identifier, it wil be replaced by and "A".
 	 * @see #setLogicalTerminal(LogicalTerminalAddress)
+	 * 
+	 * @param sender a BIC8, BIC11 or full 12 character length logical terminal address
 	 * @since 6.4
 	 */
 	public void setSender(final String sender) {
@@ -295,7 +315,7 @@ public class SwiftBlock1 extends SwiftValueBlock implements Serializable {
 	}
 	
 	/**
-	 * Gets the BIC code from the LT address.<br />
+	 * Gets the BIC code from the LT address.<br>
 	 * 
 	 * @return the BIC object 
 	 * @since 7.6
@@ -359,8 +379,8 @@ public class SwiftBlock1 extends SwiftValueBlock implements Serializable {
 
 	/**
 	 * Tell if this block is empty or not.
-	 * This block is considered to be empty if all its attributes are set to <code>null</code>.
-	 * @return <code>true</code> if all fields are <code>null</code> and false in other case
+	 * This block is considered to be empty if all its attributes are set to null.
+	 * @return <code>true</code> if all fields are null and false in other case
 	 */
 	public boolean isEmpty() {
 		return applicationId == null && serviceId == null && logicalTerminal == null && sessionNumber == null && sequenceNumber == null;
@@ -418,7 +438,7 @@ public class SwiftBlock1 extends SwiftValueBlock implements Serializable {
 	
 	/**
 	 * Sets the block's attributes by parsing string argument with its content<br>
-	 * This value can be in different flavors because some fields are optional.<br />
+	 * This value can be in different flavors because some fields are optional.<br>
 	 * For example "F01BANKBEBBAXXX2222123456" or "1:F01BANKBEBBAXXX2222123456".
 	 * 
 	 * @param value string containing the entire blocks value
@@ -498,88 +518,59 @@ public class SwiftBlock1 extends SwiftValueBlock implements Serializable {
 		sequenceNumber = null;
 	}
 
-	public int hashCode() {
-		final int prime = 31;
-		int result = super.hashCode();
-		result = prime * result + ((applicationId == null) ? 0 : applicationId.hashCode());
-		result = prime * result + ((logicalTerminal == null) ? 0 : logicalTerminal.hashCode());
-		result = prime * result + ((sequenceNumber == null) ? 0 : sequenceNumber.hashCode());
-		result = prime * result + ((serviceId == null) ? 0 : serviceId.hashCode());
-		result = prime * result + ((sessionNumber == null) ? 0 : sessionNumber.hashCode());
-		return result;
+	@Override
+	public boolean equals(Object o) {
+		if (this == o) return true;
+		if (o == null || getClass() != o.getClass()) return false;
+		if (!super.equals(o)) return false;
+		SwiftBlock1 that = (SwiftBlock1) o;
+		return Objects.equals(applicationId, that.applicationId) &&
+				Objects.equals(serviceId, that.serviceId) &&
+				Objects.equals(logicalTerminal, that.logicalTerminal) &&
+				Objects.equals(sessionNumber, that.sessionNumber) &&
+				Objects.equals(sequenceNumber, that.sequenceNumber);
 	}
 
-	public boolean equals(final Object obj) {
-		if (obj == null) {
-			return false;
-		}
-		if (this == obj) {
-			return true;
-		}
-		if (!super.equals(obj)) {
-			return false;
-		}
-		if (getClass() != obj.getClass()) {
-			return false;
-		}
-		final SwiftBlock1 other = (SwiftBlock1) obj;
-		if (applicationId == null) {
-			if (other.applicationId != null) {
-				return false;
-			}
-		} else if (!applicationId.equals(other.applicationId)) {
-			return false;
-		}
-		if (logicalTerminal == null) {
-			if (other.logicalTerminal != null) {
-				return false;
-			}
-		} else if (!logicalTerminal.equals(other.logicalTerminal)) {
-			return false;
-		}
-		if (sequenceNumber == null) {
-			if (other.sequenceNumber != null) {
-				return false;
-			}
-		} else if (!sequenceNumber.equals(other.sequenceNumber)) {
-			return false;
-		}
-		if (serviceId == null) {
-			if (other.serviceId != null) {
-				return false;
-			}
-		} else if (!serviceId.equals(other.serviceId)) {
-			return false;
-		}
-		if (sessionNumber == null) {
-			if (other.sessionNumber != null) {
-				return false;
-			}
-		} else if (!sessionNumber.equals(other.sessionNumber)) {
-			return false;
-		}
-		return true;
+	@Override
+	public int hashCode() {
+		return Objects.hash(super.hashCode(), applicationId, serviceId, logicalTerminal, sessionNumber, sequenceNumber);
 	}
 
 	/**
-	 * @since 7.5
-	 */
+     * Get a json representation of this object.
+     *
+     * Example:<br>
+     * <pre>
+     *{
+     * "applicationId": "F",
+     * "serviceId": "01",
+     * "logicalTerminal": "FOOSEDR0AXXX",
+     * "sessionNumber": "0000",
+     * "sequenceNumber": "000000"
+     *}
+     *  </pre>
+     *
+     * @since 7.5
+     */
 	public String toJson() {
-		final StringBuilder sb = new StringBuilder();
-		sb.append("{ \n");
-		sb.append( "\"applicationId\" : ").append("\"").append(applicationId).append("\", \n");
-		sb.append( "\"serviceId\" : ").append("\"").append(serviceId).append("\", \n");
-		sb.append( "\"logicalTerminal\" : \"").append(logicalTerminal).append("\", \n");
-		sb.append( "\"sessionNumber\" : \"").append(sessionNumber).append("\", \n");
-		sb.append( "\"sequenceNumber\" : \"").append(sequenceNumber).append("\" \n");
-		sb.append("} ");
-		return sb.toString();
+		final Gson gson = new GsonBuilder().create();
+		return gson.toJson(this);
 	}
-	
+
+    /**
+     * This method deserializes the JSON data into an block 1 object.
+	 * @see #toJson()
+     * @since 7.9.8
+     */
+    public static SwiftBlock1 fromJson(String json){
+        final Gson gson = new GsonBuilder().create();
+        return gson.fromJson(json,SwiftBlock1.class);
+    }
+
 	/**
 	 * Generic getter for block attributes based on qualified names from {@link SwiftBlock1Field}
 	 * @param field field to get
-	 * @return field value or <code>null</code> if attribute is not set
+	 * @return field value or null if attribute is not set
 	 * @since 7.7
 	 */
 	public String field(SwiftBlock1Field field) {
@@ -637,7 +628,7 @@ public class SwiftBlock1 extends SwiftValueBlock implements Serializable {
 		try {
 			return ServiceIdType.valueOf("_"+this.serviceId);
 		} catch (Exception e) {
-			final String text = "Block1 serviceId contains an invalid value ["+ this.serviceId +"]. The expected values are "+ServiceIdType.values();
+			final String text = "Block1 serviceId contains an invalid value ["+ this.serviceId +"]. The expected values are "+ Arrays.toString(ServiceIdType.values());
 			log.warning(text);
 			log.log(Level.FINEST, text, e);
 			return null;

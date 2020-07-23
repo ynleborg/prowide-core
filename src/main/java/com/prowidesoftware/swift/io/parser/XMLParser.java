@@ -1,45 +1,34 @@
-/*******************************************************************************
- * Copyright (c) 2016 Prowide Inc.
+/*
+ * Copyright 2006-2018 Prowide
  *
- *     This program is free software: you can redistribute it and/or modify
- *     it under the terms of the GNU Lesser General Public License as 
- *     published by the Free Software Foundation, either version 3 of the 
- *     License, or (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *     This program is distributed in the hope that it will be useful,
- *     but WITHOUT ANY WARRANTY; without even the implied warranty of
- *     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  
- *     
- *     Check the LGPL at <http://www.gnu.org/licenses/> for more details.
- *******************************************************************************/
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.prowidesoftware.swift.io.parser;
 
-import java.io.ByteArrayInputStream;
-import java.util.logging.Level;
-
-import javax.xml.parsers.DocumentBuilder;
-import javax.xml.parsers.DocumentBuilderFactory;
-
-import org.apache.commons.lang.StringUtils;
-import org.apache.commons.lang.Validate;
+import com.prowidesoftware.swift.io.writer.FINWriterVisitor;
+import com.prowidesoftware.swift.model.*;
+import com.prowidesoftware.swift.model.field.Field;
+import com.prowidesoftware.swift.utils.SafeXmlUtils;
+import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.Validate;
 import org.w3c.dom.Document;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
-import com.prowidesoftware.swift.io.writer.FINWriterVisitor;
-import com.prowidesoftware.swift.model.SwiftBlock1;
-import com.prowidesoftware.swift.model.SwiftBlock2;
-import com.prowidesoftware.swift.model.SwiftBlock2Input;
-import com.prowidesoftware.swift.model.SwiftBlock2Output;
-import com.prowidesoftware.swift.model.SwiftBlock3;
-import com.prowidesoftware.swift.model.SwiftBlock4;
-import com.prowidesoftware.swift.model.SwiftBlock5;
-import com.prowidesoftware.swift.model.SwiftBlockUser;
-import com.prowidesoftware.swift.model.SwiftMessage;
-import com.prowidesoftware.swift.model.SwiftTagListBlock;
-import com.prowidesoftware.swift.model.Tag;
-import com.prowidesoftware.swift.model.UnparsedTextList;
-import com.prowidesoftware.swift.model.field.Field;
+import javax.xml.parsers.DocumentBuilder;
+import java.io.ByteArrayInputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.logging.Level;
 
 /**
  * This is the main parser for WIFE's XML internal representation.<br>
@@ -58,10 +47,12 @@ import com.prowidesoftware.swift.model.field.Field;
 public class XMLParser {
 	private static final transient java.util.logging.Logger log = java.util.logging.Logger.getLogger(XMLParser.class.getName());
 
+	private static final String UNPARSEDTEXTS = "unparsedtexts";
+
 	/**
 	 * Given a String containing a message in its WIFE internal XML
 	 * representation, returns a SwiftMessage object.
-	 * If there is any error during conversion this method returns <code>null</code>
+	 * If there is any error during conversion this method returns null
 	 * @param xml the string containing the XML to parse
 	 * @return the XML parsed into a SwiftMessage object
 	 *
@@ -70,8 +61,8 @@ public class XMLParser {
 	public SwiftMessage parse(final String xml) {
 		Validate.notNull(xml);
 		try {
-			final DocumentBuilder db = DocumentBuilderFactory.newInstance().newDocumentBuilder();
-			final Document doc = db.parse(new ByteArrayInputStream(xml.getBytes()));
+			final DocumentBuilder db = SafeXmlUtils.documentBuilder();
+			final Document doc = db.parse(new ByteArrayInputStream(xml.getBytes(StandardCharsets.UTF_8)));
 			return createMessage(doc);
 		} catch (final Exception e) {
 			log.log(Level.WARNING, "Error parsing XML", e);
@@ -110,7 +101,7 @@ public class XMLParser {
 						m.setBlock1(getBlock1FromNode(blockNode));
 					} else if ("block2".equalsIgnoreCase(blockName)) {
 						m.setBlock2(getBlock2FromNode(blockNode));
-					} else if ("unparsedtexts".equalsIgnoreCase(blockName)) {
+					} else if (UNPARSEDTEXTS.equalsIgnoreCase(blockName)) {
 						// unparsed texts at <message> level
 						m.setUnparsedTexts(getUnparsedTextsFromNode(blockNode));
 					} else {
@@ -152,7 +143,7 @@ public class XMLParser {
 				b1.setSessionNumber(getText(n));
 			} else if ("SEQUENCENUMBER".equalsIgnoreCase(n.getNodeName())) {
 				b1.setSequenceNumber(getText(n));
-			} else if ("unparsedTexts".equalsIgnoreCase(n.getNodeName())) {
+			} else if (UNPARSEDTEXTS.equalsIgnoreCase(n.getNodeName())) {
 				b1.setUnparsedTexts(getUnparsedTextsFromNode(n));
 			}
 		}
@@ -165,7 +156,7 @@ public class XMLParser {
 		final Node c = n.getFirstChild();
 		if (c != null) {
 			if (c.getNodeType() == Node.TEXT_NODE) {
-				text = c.getNodeValue().trim();
+				text = c.getNodeValue();
 			} else {
 				log.warning("Node is not TEXT_NODE: "+c);
 			}
@@ -228,7 +219,7 @@ public class XMLParser {
 				b2.setDeliveryMonitoring(getText(n));
 			} else if ("OBSOLESCENCEPERIOD".equalsIgnoreCase(n.getNodeName())) {
 				b2.setObsolescencePeriod(getText(n));
-			} else if ("unparsedTexts".equalsIgnoreCase(n.getNodeName())) {
+			} else if (UNPARSEDTEXTS.equalsIgnoreCase(n.getNodeName())) {
 				b2.setUnparsedTexts(getUnparsedTextsFromNode(n));
 			}
 		}
@@ -272,7 +263,7 @@ public class XMLParser {
 				b2.setReceiverOutputTime(getText(n));
 			} else if ("MESSAGEPRIORITY".equalsIgnoreCase(n.getNodeName())) {
 				b2.setMessagePriority(getText(n));
-			} else if ("unparsedTexts".equalsIgnoreCase(n.getNodeName())) {
+			} else if (UNPARSEDTEXTS.equalsIgnoreCase(n.getNodeName())) {
 				b2.setUnparsedTexts(getUnparsedTextsFromNode(n));
 			}
 		}
@@ -322,7 +313,7 @@ public class XMLParser {
 			} else if ("field".equalsIgnoreCase(t.getNodeName())) {
 					final Field field = getField(t);
 					b.append(field);
-			} else if ("unparsedtexts".equalsIgnoreCase(t.getNodeName())) {
+			} else if (UNPARSEDTEXTS.equalsIgnoreCase(t.getNodeName())) {
 				b.setUnparsedTexts(getUnparsedTextsFromNode(t));
 			}
 		}
@@ -344,11 +335,6 @@ public class XMLParser {
 		final NodeList children = t.getChildNodes();
 		for (int i = 0; i < children.getLength(); i++) {
 			final Node n = children.item(i);
-			
-			/*
-			 * soportar ambas versiones de xml automagicamente
-			 */
-			
 			if ("name".equalsIgnoreCase(n.getNodeName())) {
 				tag.setName(getText(n));
 			}
@@ -357,7 +343,7 @@ public class XMLParser {
 				//normalize line feeds (DOM parser removes carriage return characters from original XML file)
 				text = StringUtils.replace(text, "\n", FINWriterVisitor.SWIFT_EOL);
 				tag.setValue(text);
-			} else if ("unparsedtexts".equalsIgnoreCase(n.getNodeName())) {
+			} else if (UNPARSEDTEXTS.equalsIgnoreCase(n.getNodeName())) {
 				tag.setUnparsedTexts(getUnparsedTextsFromNode(n));
 			}
 		}

@@ -1,22 +1,29 @@
-/*******************************************************************************
- * Copyright (c) 2016 Prowide Inc.
+/*
+ * Copyright 2006-2018 Prowide
  *
- *     This program is free software: you can redistribute it and/or modify
- *     it under the terms of the GNU Lesser General Public License as 
- *     published by the Free Software Foundation, either version 3 of the 
- *     License, or (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *     This program is distributed in the hope that it will be useful,
- *     but WITHOUT ANY WARRANTY; without even the implied warranty of
- *     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  
- *     
- *     Check the LGPL at <http://www.gnu.org/licenses/> for more details.
- *******************************************************************************/
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.prowidesoftware.swift.model;
 
-import java.io.Serializable;
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.prowidesoftware.deprecation.DeprecationUtils;
+import com.prowidesoftware.deprecation.ProwideDeprecated;
+import com.prowidesoftware.deprecation.TargetYear;
+import org.apache.commons.lang3.Validate;
 
-import org.apache.commons.lang.Validate;
+import java.io.Serializable;
+import java.util.Objects;
 
 /**
  * Base class for SWIFT <b>Application Header Block (block 2)
@@ -27,7 +34,7 @@ import org.apache.commons.lang.Validate;
  * 
  * <p>It's value is fixed-length and continuous with no field delimiters. 
  * This class contains its elements as individual attributes for 
- * easier management of the block value.</p>
+ * easier management of the block value.
  * 
  * <p>For a received message, a message being output from SWIFT, the 
  * SwiftBlock2Output includes explicit information regarding the MIR. 
@@ -35,12 +42,11 @@ import org.apache.commons.lang.Validate;
  * input reference. The important thing to understand here is that the 
  * MIR information is related to the original sender of the message that 
  * has been received. The attributes of this header (block 2 output) are 
- * explicitly documented as MIR information by SWIFT.</p>
+ * explicitly documented as MIR information by SWIFT.
  * 
  * <p>The MOR itself could be created combining information from block 1 
- * and 2 but it usually does not make sense.</p>
- * 
- * @author www.prowidesoftware.com
+ * and 2 but it usually does not make sense.
+ *
  * @since 4.0
  * @see MIR
  */
@@ -49,6 +55,7 @@ public class SwiftBlock2Output extends SwiftBlock2 implements Serializable {
 	private static final long serialVersionUID = 6067091531833134527L;
 	@SuppressWarnings("unused")
 	private static final transient java.util.logging.Logger log = java.util.logging.Logger.getLogger(SwiftBlock2.class.getName());
+	private static final String SEPARATOR = "\", \n";
 
 	/** 
 	 * String of 4 characters containing the input time with respect to the sender
@@ -106,6 +113,7 @@ public class SwiftBlock2Output extends SwiftBlock2 implements Serializable {
 	 */
 	public SwiftBlock2Output(final String messageType, final String senderInputTime, final String MIRDate, final String MIRLogicalTerminal, final String MIRSessionNumber, final String MIRSequenceNumber, final String receiverOutputDate, final String receiverOutputTime, final String messagePriority) {
 		super();
+		this.output = true;
 		this.messageType = messageType;
 		this.senderInputTime = senderInputTime;
 		this.MIRDate = MIRDate;
@@ -149,6 +157,15 @@ public class SwiftBlock2Output extends SwiftBlock2 implements Serializable {
 	 */
 	public SwiftBlock2Output() {
 		super();
+	}
+
+	/**
+	 * Copy constructor
+	 * @param block an existing block2 to copy
+	 * @since 7.10.4
+	 */
+	public SwiftBlock2Output(SwiftBlock2Output block) {
+		this(block.getMessageType(), block.getSenderInputTime(), block.getMIRDate(), block.getMIRLogicalTerminal(), block.getMIRSessionNumber(), block.getMIRSequenceNumber(), block.getReceiverOutputDate(), block.getReceiverOutputTime(), block.getMessagePriority());
 	}
 
 	/**
@@ -223,7 +240,7 @@ public class SwiftBlock2Output extends SwiftBlock2 implements Serializable {
 	
 	/**
 	 * Completes if necessary and sets the LT address of the sender
-	 * as MIR logical terminal address.<br />
+	 * as MIR logical terminal address.<br>
  	 * The sender addresses will be filled with proper default LT identifier and branch codes if not provided.
 	 * 
 	 * @see #setMIRLogicalTerminal(LogicalTerminalAddress)
@@ -244,7 +261,7 @@ public class SwiftBlock2Output extends SwiftBlock2 implements Serializable {
 	}
 	
 	/**
-	 * Gets the sender's BIC code.<br />
+	 * Gets the sender's BIC code.<br>
 	 * For output message the sender address is contained in this block2
 	 * and not in the header block 1 as for input messages.
 	 * 
@@ -299,7 +316,7 @@ public class SwiftBlock2Output extends SwiftBlock2 implements Serializable {
 	 * characters containing the sender's date, LT address,
 	 * session and sequence:<br>
 	 * for example YYMMDDBANKBEBBAXXX2222123456<br>
-	 * @return a String with MIR, returns <code>null</code> if all MIR components are <code>null</code> 
+	 * @return a String with MIR, returns null if all MIR components are null
 	 */
 	public String getMIR() {
 		if (MIRDate == null && MIRLogicalTerminal == null && MIRSessionNumber == null && MIRSequenceNumber == null) {
@@ -333,7 +350,7 @@ public class SwiftBlock2Output extends SwiftBlock2 implements Serializable {
 	}
 	
 	/**
-	 * Sets the MIR (Message Input Reference) attributes by parsing the string argument containing the complete MIR value.<br /> 
+	 * Sets the MIR (Message Input Reference) attributes by parsing the string argument containing the complete MIR value.<br>
 	 * For example YYMMDDBANKBEBBAXXX2222123456<br>
 	 * 
 	 * @param mir complete MIR string
@@ -342,32 +359,32 @@ public class SwiftBlock2Output extends SwiftBlock2 implements Serializable {
 	public void setMIR(final String mir, boolean lenient) {
 		if (!lenient) {
     		Validate.notNull(mir);
-    		Validate.isTrue(mir.length() == 28, "expected a 28 characters string for MIR value and found a " + mir.length() + " string:" + mir);
+    		if (mir != null) {
+				Validate.isTrue(mir.length() == 28, "expected a 28 characters string for MIR value and found a " + mir.length() + " string:" + mir);
+			}
 		}
 		if (mir != null) {
-    		final StringBuilder sb = new StringBuilder(mir);
-    
     		int offset = 0;
     		int len;
     
     		len = 6;
-    		this.setMIRDate(String.valueOf(sb.subSequence(offset, offset + len)));
+    		this.setMIRDate(getValuePart(mir, offset, len));
     		offset += len;
     
     		len = 12;
-    		this.setMIRLogicalTerminal(String.valueOf(sb.subSequence(offset, offset + len)));
+    		this.setMIRLogicalTerminal(getValuePart(mir, offset, len));
     		offset += len;
     
     		len = 4;
-    		this.setMIRSessionNumber(String.valueOf(sb.subSequence(offset, offset + len)));
+    		this.setMIRSessionNumber(getValuePart(mir, offset, len));
     		offset += len;
     
     		if (lenient) {
         		//get all remaining text
-    			this.setMIRSequenceNumber(String.valueOf(sb.subSequence(offset, mir.length())));
+    			this.setMIRSequenceNumber(getValuePart(mir, offset, mir.length()));
         	} else {
         		len = 6;
-        		this.setMIRSequenceNumber(String.valueOf(sb.subSequence(offset, offset + len)));
+        		this.setMIRSequenceNumber(getValuePart(mir, offset, len));
         	}
 		}
 	}
@@ -410,8 +427,8 @@ public class SwiftBlock2Output extends SwiftBlock2 implements Serializable {
 
 	/**
 	 * Tell if this block is empty or not.
-	 * This block is considered to be empty if all its attributes are set to <code>null</code>.
-	 * @return <code>true</code> if all fields are <code>null</code> and false in other case
+	 * This block is considered to be empty if all its attributes are set to null.
+	 * @return <code>true</code> if all fields are null and false in other case
 	 */
 	public boolean isEmpty() {
 		return messageType == null && senderInputTime == null && getMIR() == null && receiverOutputDate == null && receiverOutputTime == null && messagePriority == null;
@@ -472,15 +489,15 @@ public class SwiftBlock2Output extends SwiftBlock2 implements Serializable {
 	}
 	
 	/**
-	 * Sets the block's attributes by parsing the string argument containing the blocks value.<br /> 
-	 * This value can be in different flavors because some fields are optional.<br />
-	 * Example of supported values:<br />
+	 * Sets the block's attributes by parsing the string argument containing the blocks value.<br>
+	 * This value can be in different flavors because some fields are optional.<br>
+	 * Example of supported values:<br>
 	 * <pre>
 	 *   "O1001200970103BANKBEBBAXXX22221234569701031201" (46) or
 	 *   "2:O1001200970103BANKBEBBAXXX22221234569701031201" (48)   // used for service/system messages
 	 *   "O1001200970103BANKBEBBAXXX22221234569701031201N" (47) or
 	 *   "2:O1001200970103BANKBEBBAXXX22221234569701031201N" (49)
-	 * </pre><br />
+	 * </pre><br>
 	 * 
 	 * @param value string containing the entire blocks value
 	 * @param lenient if true the value will be parsed with a best effort heuristic, if false it will throw a IllegalArgumentException if the value has an invalid total size
@@ -520,7 +537,7 @@ public class SwiftBlock2Output extends SwiftBlock2 implements Serializable {
         		}
     		}
     		offset++; // skip the output mark
-    
+
     		// separate value fragments
     		int len = 3;
     		this.setMessageType(this.getValuePart(value, offset, len));
@@ -561,84 +578,49 @@ public class SwiftBlock2Output extends SwiftBlock2 implements Serializable {
 	}
 
 	@Override
-	public int hashCode() {
-		final int prime = 31;
-		int result = super.hashCode();
-		result = prime * result + ((MIRDate == null) ? 0 : MIRDate.hashCode());
-		result = prime * result + ((MIRLogicalTerminal == null) ? 0 : MIRLogicalTerminal.hashCode());
-		result = prime * result + ((MIRSequenceNumber == null) ? 0 : MIRSequenceNumber.hashCode());
-		result = prime * result + ((MIRSessionNumber == null) ? 0 : MIRSessionNumber.hashCode());
-		result = prime * result + ((receiverOutputDate == null) ? 0 : receiverOutputDate.hashCode());
-		result = prime * result + ((receiverOutputTime == null) ? 0 : receiverOutputTime.hashCode());
-		result = prime * result + ((senderInputTime == null) ? 0 : senderInputTime.hashCode());
-		return result;
+	public boolean equals(Object o) {
+		if (this == o) return true;
+		if (o == null || getClass() != o.getClass()) return false;
+		if (!super.equals(o)) return false;
+		SwiftBlock2Output that = (SwiftBlock2Output) o;
+		return Objects.equals(senderInputTime, that.senderInputTime) &&
+				Objects.equals(MIRDate, that.MIRDate) &&
+				Objects.equals(MIRLogicalTerminal, that.MIRLogicalTerminal) &&
+				Objects.equals(MIRSessionNumber, that.MIRSessionNumber) &&
+				Objects.equals(MIRSequenceNumber, that.MIRSequenceNumber) &&
+				Objects.equals(receiverOutputDate, that.receiverOutputDate) &&
+				Objects.equals(receiverOutputTime, that.receiverOutputTime);
 	}
 
 	@Override
-	public boolean equals(Object obj) {
-		if (obj == null)
-			return false;
-		if (this == obj)
-			return true;
-		if (!super.equals(obj))
-			return false;
-		if (getClass() != obj.getClass())
-			return false;
-		SwiftBlock2Output other = (SwiftBlock2Output) obj;
-		if (MIRDate == null) {
-			if (other.MIRDate != null)
-				return false;
-		} else if (!MIRDate.equals(other.MIRDate))
-			return false;
-		if (MIRLogicalTerminal == null) {
-			if (other.MIRLogicalTerminal != null)
-				return false;
-		} else if (!MIRLogicalTerminal.equals(other.MIRLogicalTerminal))
-			return false;
-		if (MIRSequenceNumber == null) {
-			if (other.MIRSequenceNumber != null)
-				return false;
-		} else if (!MIRSequenceNumber.equals(other.MIRSequenceNumber))
-			return false;
-		if (MIRSessionNumber == null) {
-			if (other.MIRSessionNumber != null)
-				return false;
-		} else if (!MIRSessionNumber.equals(other.MIRSessionNumber))
-			return false;
-		if (receiverOutputDate == null) {
-			if (other.receiverOutputDate != null)
-				return false;
-		} else if (!receiverOutputDate.equals(other.receiverOutputDate))
-			return false;
-		if (receiverOutputTime == null) {
-			if (other.receiverOutputTime != null)
-				return false;
-		} else if (!receiverOutputTime.equals(other.receiverOutputTime))
-			return false;
-		if (senderInputTime == null) {
-			if (other.senderInputTime != null)
-				return false;
-		} else if (!senderInputTime.equals(other.senderInputTime))
-			return false;
-		return true;
+	public int hashCode() {
+		return Objects.hash(super.hashCode(), senderInputTime, MIRDate, MIRLogicalTerminal, MIRSessionNumber, MIRSequenceNumber, receiverOutputDate, receiverOutputTime);
 	}
-	
+
 	/**
-	 * @since 7.5
+	 * Legacy (version 1) json representation of this object.
+	 *
+	 * <p>This implementation has been replaced by version 2, based on Gson.
+	 *
+	 * @deprecated use {@link #toJson()} instead
+	 * @since 7.9.8
 	 */
-	public String toJson() {
+	@Deprecated
+	@ProwideDeprecated(phase3 = TargetYear.SRU2020)
+	public String toJsonV1() {
+		DeprecationUtils.phase2(getClass(), "toJsonV1()", "use toJson() instead");
 		final StringBuilder sb = new StringBuilder();
 		sb.append("{ \n");
 
-		sb.append(" \"messageType\" : \"").append(messageType).append("\", \n");
-		sb.append(" \"senderInputTime\" : \"").append(senderInputTime).append("\", \n");
+		sb.append(" \"messageType\" : \"").append(messageType).append(SEPARATOR);
+		sb.append(" \"senderInputTime\" : \"").append(senderInputTime).append(SEPARATOR);
 		sb.append(" \"MIRDate\" : \"").append(MIRDate).append("\", \n");
-		sb.append(" \"MIRLogicalTerminal\" : \"").append(MIRLogicalTerminal).append("\", \n");
-		sb.append(" \"MIRSessionNumber\" : \"").append(MIRSessionNumber).append("\", \n");
-		sb.append(" \"MIRSequenceNumber\" : \"").append(MIRSequenceNumber).append("\", \n");
-		sb.append(" \"receiverOutputDate\" : \"").append(receiverOutputDate).append("\", \n");
-		sb.append(" \"receiverOutputTime\" : \"").append(receiverOutputTime).append("\", \n");
-		sb.append(" \"messagePriority\" : \"").append(messagePriority).append("\" \n");
+		sb.append(" \"MIRLogicalTerminal\" : \"").append(MIRLogicalTerminal).append(SEPARATOR);
+		sb.append(" \"MIRSessionNumber\" : \"").append(MIRSessionNumber).append(SEPARATOR);
+		sb.append(" \"MIRSequenceNumber\" : \"").append(MIRSequenceNumber).append(SEPARATOR);
+		sb.append(" \"receiverOutputDate\" : \"").append(receiverOutputDate).append(SEPARATOR);
+		sb.append(" \"receiverOutputTime\" : \"").append(receiverOutputTime).append(SEPARATOR);
+		sb.append(" \"messagePriority\" : \"").append(messagePriority).append(SEPARATOR);
 
 		sb.append("} ");
 		return sb.toString();
@@ -647,7 +629,7 @@ public class SwiftBlock2Output extends SwiftBlock2 implements Serializable {
 	/**
 	 * Generic getter for block attributes based on qualified names from {@link SwiftBlock2OutputField}
 	 * @param field field to get
-	 * @return field value or <code>null</code> if attribute is not set
+	 * @return field value or null if attribute is not set
 	 * @since 7.7
 	 */
 	public String field(SwiftBlock2OutputField field) {
@@ -670,8 +652,10 @@ public class SwiftBlock2Output extends SwiftBlock2 implements Serializable {
 				return getReceiverOutputDate();
 			case ReceiverOutputTime:
 				return getReceiverOutputTime();
+			default:
+				return null;
+
 		}
-		return null;
 	}
 	
 	/**
@@ -709,6 +693,17 @@ public class SwiftBlock2Output extends SwiftBlock2 implements Serializable {
 			case ReceiverOutputTime:
 				setReceiverOutputTime(value);
 				break;
+			default:break;
 		}
+	}
+
+	/**
+	 * This method deserializes the JSON data into an incoming (output) block 2 object.
+	 * @see #toJson()
+	 * @since 7.9.8
+	 */
+	public static SwiftBlock2Output fromJson(String json){
+		final Gson gson = new GsonBuilder().create();
+		return gson.fromJson(json, SwiftBlock2Output.class);
 	}
 }

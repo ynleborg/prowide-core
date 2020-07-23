@@ -1,0 +1,174 @@
+apply plugin: 'java-library-distribution'
+apply plugin: 'idea'
+apply plugin: 'eclipse'
+apply plugin: 'maven'
+apply plugin: 'jacoco'
+
+archivesBaseName = 'pw-swift-core'
+
+def SRU = "2019"
+
+version "SRU${SRU}-8.0.2"
+group 'com.prowidesoftware'
+	
+sourceCompatibility = '1.8'
+targetCompatibility = '1.8'
+	
+tasks.withType(JavaCompile) {
+	options.fork = true
+	if (project.hasProperty('JDK8_HOME')) {
+		options.forkOptions.executable = "$JDK8_HOME/bin/javac"
+	} else {
+		println "*** Compiling with newer version of Java, this is just fine for development; for releases a proper JDK8_HOME variable must be set in gradle.properties ***"
+	}
+	options.encoding = 'UTF-8'
+}
+	
+repositories {
+    mavenCentral()
+	jcenter()
+}
+	
+dependencies {
+	implementation 'org.apache.commons:commons-lang3:3.8.1'
+	implementation 'org.apache.commons:commons-text:1.6'
+	implementation 'com.google.code.gson:gson:2.8.2'
+	compileOnly 'javax.persistence:javax.persistence-api:2.2'
+	compileOnly group: 'javax.validation', name: 'validation-api', version: '1.0.0.GA'
+	testImplementation 'junit:junit:4.12'
+	testImplementation group: 'org.assertj', name: 'assertj-core', version: '3.13.2'
+	testImplementation group: 'org.xmlunit', name: 'xmlunit-core', version: '2.6.3'
+	testImplementation group: 'org.xmlunit', name: 'xmlunit-matchers', version: '2.6.3'
+	testImplementation group: 'org.xmlunit', name: 'xmlunit-assertj', version: '2.6.3'
+	testImplementation group: 'org.powermock', name: 'powermock-api-mockito2', version: '2.0.0'
+	testImplementation group: 'org.powermock', name: 'powermock-module-junit4', version: '2.0.0'
+}
+
+sourceSets.main.java.srcDirs = ['src/main/java', 'src/generated/java']
+
+
+def formattedDate() { 
+	new Date().format('dd MMM yyyy') 
+}
+
+javadoc {
+	failOnError false
+	options.overview = "src/main/java/overview.html"
+	options.header = "${version}"
+	options.windowTitle = "Prowide Core API Reference"
+	options.footer="SRU${SRU}, generated ${formattedDate()}"
+	
+	// this will fail when the option is not available (older JDK)
+	options.addBooleanOption("-allow-script-in-comments", true)
+    
+	options.bottom = '<script src="//static.getclicky.com/js"></script><script>try{ clicky.init(101039278); }catch(e){}</script>'
+	exclude "**/internal/**"
+}
+
+task javadocJar(type: Jar, dependsOn: javadoc) {
+	archiveClassifier = 'javadoc'
+    from javadoc.destinationDir
+}
+
+task sourcesJar(type: Jar, dependsOn: classes) {
+	archiveClassifier = 'sources'
+    from sourceSets.main.allSource
+}
+
+tasks.withType(Jar) {
+	manifest.attributes(
+		'Specification-Title': 'Prowide Core',
+		'Specification-Version': project.version,
+		'Specification-Vendor': "SRU${SRU}",
+		'Implementation-Title': 'Prowide Core',
+		'Implementation-Version': project.version,
+		'Implementation-Vendor': 'www.prowidesoftware.com',
+		'Built-OS': System.getProperty('os.name'),
+		'Source-Compatibility': project.sourceCompatibility,
+		'Target-Compatibility': project.targetCompatibility,
+		'Built-Date': new Date().format("yyyy-MM-dd")
+	)
+}
+
+task writePom {
+	doLast {
+		pom {
+			project {
+				groupId "com.prowidesoftware"
+				artifactId "${rootProject.name}"
+				version "${version}"
+
+				inceptionYear '2006'
+				licenses {
+					license {
+						name 'Apache License Version 2.0'
+						url 'https://www.apache.org/licenses/LICENSE-2.0'
+						distribution 'repo'
+					}
+				}
+				developers {
+					developer {
+						id 'zubri'
+						name 'Sebastian Zubrinic'
+						email 'sebastian@prowidesoftware.com'
+					}
+				}
+				organization {
+					name 'Prowide'
+					url 'http://www.prowidesoftware.com'
+				}
+			}
+		}.writeTo("$buildDir/pom.xml")
+	}
+}
+
+
+distributions {
+	main {
+		contents {
+			from javadocJar
+			from sourcesJar
+			into ('lib') {
+				from (project.configurations.runtime)
+			}
+			from files('LICENSE.txt', 'CHANGELOG.txt')
+			from files("$buildDir/pom.xml")
+		}
+	}
+}
+
+distTar.enabled = false
+
+distZip {
+    dependsOn writePom
+}
+
+jacocoTestReport {
+    reports {
+        xml.enabled true
+        csv.enabled false
+        html.enabled false
+    }
+    
+	// exclude generated code
+	afterEvaluate {
+		getClassDirectories().setFrom(classDirectories.files.collect {
+			fileTree(dir: it, exclude: [
+				'**/SchemeConstants**',
+				'**/mt0xx/**',
+				'**/mt1xx/**',
+				'**/mt2xx/**',
+				'**/mt3xx/**',
+				'**/mt4xx/**',
+				'**/mt5xx/**',
+				'**/mt6xx/**',
+				'**/mt7xx/**',
+				'**/mt8xx/**',
+				'**/mt9xx/**',
+				'**/dic/**'
+			])
+		})
+	}
+}
+
+test.finalizedBy jacocoTestReport

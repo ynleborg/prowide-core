@@ -1,76 +1,65 @@
-/*******************************************************************************
- * Copyright (c) 2016 Prowide Inc.
+/*
+ * Copyright 2006-2018 Prowide
  *
- *     This program is free software: you can redistribute it and/or modify
- *     it under the terms of the GNU Lesser General Public License as 
- *     published by the Free Software Foundation, either version 3 of the 
- *     License, or (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *     This program is distributed in the hope that it will be useful,
- *     but WITHOUT ANY WARRANTY; without even the implied warranty of
- *     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  
- *     
- *     Check the LGPL at <http://www.gnu.org/licenses/> for more details.
- *******************************************************************************/
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.prowidesoftware.swift.model;
 
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.prowidesoftware.swift.io.ConversionService;
+import com.prowidesoftware.swift.model.mt.AbstractMT;
+import com.prowidesoftware.swift.model.mt.MTVariant;
+import com.prowidesoftware.swift.model.mt.ServiceIdType;
+import org.apache.commons.lang3.EnumUtils;
+import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.Validate;
+
+import javax.persistence.Column;
+import javax.persistence.DiscriminatorValue;
+import javax.persistence.Entity;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Calendar;
+import java.util.Objects;
 import java.util.logging.Level;
-
-import org.apache.commons.lang.StringUtils;
-import org.apache.commons.lang.Validate;
-
-import com.prowidesoftware.deprecation.DeprecationUtils;
-import com.prowidesoftware.deprecation.ProwideDeprecated;
-import com.prowidesoftware.deprecation.TargetYear;
-import com.prowidesoftware.swift.io.ConversionService;
-import com.prowidesoftware.swift.io.parser.SwiftParser;
-import com.prowidesoftware.swift.io.parser.SwiftParserConfiguration;
-import com.prowidesoftware.swift.model.mt.AbstractMT;
-import com.prowidesoftware.swift.model.mt.ServiceIdType;
-import com.prowidesoftware.swift.utils.Lib;
 
 
 /**
  * Container of raw representations of an MT (ISO 15022) SWIFT message, intended for message persistence.
- * The class holds the full FIN message content plus minimal message identification metadata.<br />
- *
- * @author www.prowidesoftware.com
+ * The class holds the full FIN message content plus minimal message identification metadata.<br>
  * @since 7.0
  */
+@Entity(name = "mt")
+@DiscriminatorValue("mt")
 public class MtSwiftMessage extends AbstractSwiftMessage {
 	private static final transient java.util.logging.Logger log = java.util.logging.Logger.getLogger(MtSwiftMessage.class.getName());
 	private static final long serialVersionUID = -5972656648349958815L;
 
-	/**
-	 * Possible Duplicate Emission.
-	 */
+	@Column(length = 35)
 	private String pde;
 
-	/**
-	 * Possible Duplicate Message.
-	 */
+	@Column(length = 35)
 	private String pdm;
 
-	/**
-	 * Message Input Reference
-	 */
+	@Column(length = 28, name = "mir")
 	private String mir;
 
-	/**
-	 * The MUR is a free-format field in which users may specify their own reference
-	 * of up to 16 characters of the permitted character set, and it is contained
-	 * in a 108 field at the message user header (block 3).
-	 */
+	@Column(length = 16, name = "mur")
 	private String mur;
 
-	/**
-	 * User Unique Message Identifier
-	 */
+	@Column(length = 31, name = "uuid")
 	private String uuid;
 
 	public MtSwiftMessage() {
@@ -80,15 +69,16 @@ public class MtSwiftMessage extends AbstractSwiftMessage {
 	/**
 	 * Creates a new message reading the message the content from a string.
 	 * Performs a fast parsing of the header and trailer blocks to identify the message
-	 * and gather metadata information for the object attributes.<br />
+	 * and gather metadata information for the object attributes.
 	 *
-	 * If the string contains several messages, the whole passed content will be
+	 * <p>If the string contains several messages, the whole passed content will be
 	 * save in the message attribute but identification and metadata will be parser
 	 * from the first one found only.
-	 * Notice that if an ACK/NAK followed by the original
+	 * 
+	 * <p>Notice that if an ACK/NAK followed by the original
 	 * message is passed, this object will represent the ACK/NAK.
-	 * <br />
-	 * File format is set to {@link FileFormat#FIN}
+	 * 
+	 * <p>File format is set to {@link FileFormat#FIN}
 	 *
 	 * @see AbstractSwiftMessage#AbstractSwiftMessage(String)
 	 */
@@ -108,7 +98,7 @@ public class MtSwiftMessage extends AbstractSwiftMessage {
 
 	/**
 	 * Creates a new message reading the message the content from an input stream.
-	 * <br />
+	 * <br>
 	 * File format is set to {@link FileFormat#FIN}
 	 *
 	 * @see #MtSwiftMessage(String)
@@ -131,7 +121,7 @@ public class MtSwiftMessage extends AbstractSwiftMessage {
 
 	/**
 	 * Creates a new message reading the message the content from a file.
-	 * <br />
+	 * <br>
 	 * File format is set to {@link FileFormat#FIN}
 	 *
 	 * @see #MtSwiftMessage(String)
@@ -163,13 +153,9 @@ public class MtSwiftMessage extends AbstractSwiftMessage {
 			throw new IllegalArgumentException("expected source format "+FileFormat.FIN+" and found "+getFileFormat());
 		}
 		Validate.notNull(getMessage(), "the raw message attribute cannot be null");
-		final SwiftParser parser = new SwiftParser(getMessage());
-		final SwiftParserConfiguration config = new SwiftParserConfiguration();
-		config.setLenient(true);
-		parser.setConfiguration(config);
 		SwiftMessage model = null;
 		try {
-			model = parser.message();
+			model = SwiftMessage.parse(getMessage());
 		} catch (final IOException e) {
 			log.log(Level.SEVERE, "the raw message parameter could not be parsed into a SwiftMessage", e);
 		}
@@ -183,39 +169,42 @@ public class MtSwiftMessage extends AbstractSwiftMessage {
 	private void updateAttributes(final SwiftMessage model) {
 		setFileFormat(FileFormat.FIN);
 		if (model.isServiceMessage21()) {
+			/*
+			 * set identifier for system aknowledge
+			 */
+			if (model.isAck()) {
+				super.identifier = IDENTIFIER_ACK;
+			} else if (model.isNack()) {
+				super.identifier = IDENTIFIER_NAK;
+			}
 			if (model.getUnparsedTextsSize() > 0) {
-				/*
-				 * set identifier for system aknowledge
-				 */
-				if (model.isAck()) {
-					super.identifier = IDENTIFIER_ACK;
-				} else if (model.isNack()) {
-					super.identifier = IDENTIFIER_NAK;
-				}
 				/*
 				 * try to parse the appended original message (if any)
 				 * to gather receiver and reference information
 				 */
 				final SwiftMessage original = model.getUnparsedTexts().getTextAsMessage(0);
 				if (original != null) {
-					super.receiver = StringUtils.substring(original.getReceiver(), 0, 8);
+					super.receiver = bic11(original.getReceiver());
 					setDirection(original.getDirection());
 					setReference(SwiftMessageUtils.reference(original));
 				}
 			}
 		} else if (model.getBlock1() != null && model.getBlock1().getServiceIdType() == ServiceIdType._01) {
-			super.identifier = model.getMtId().id();
-			super.receiver = StringUtils.substring(model.getReceiver(), 0, 8);
+			setIdentifier(model.getMtId().id());
+			setReceiver(bic11(model.getReceiver()));
 			setDirection(model.getDirection());
 			setReference(SwiftMessageUtils.reference(model));
-			CurrencyAmount currencyAmount = SwiftMessageUtils.currencyAmount(model);
-			if (currencyAmount != null) {
-				setCurrency(currencyAmount.getCurrency());
-				setAmount(currencyAmount.getAmount());
+			Money money = SwiftMessageUtils.money(model);
+			if (money != null) {
+				setCurrency(money.getCurrency());
+				setAmount(money.getAmount());
 			}
+			setValueDate(SwiftMessageUtils.valueDate(model));
+			setTradeDate(SwiftMessageUtils.tradeDate(model));
 		}
-		super.sender = StringUtils.substring(model.getSender(), 0, 8);
+		setSender(bic11(model.getSender()));
 		setChecksum(SwiftMessageUtils.calculateChecksum(model));
+		setChecksumBody(SwiftMessageUtils.calculateChecksum(model.getBlock4()));
 		setPde(model.getPDE());
 		setPdm(model.getPDM());
 		setMir(model.getMIR());
@@ -225,8 +214,19 @@ public class MtSwiftMessage extends AbstractSwiftMessage {
 	}
 
 	/**
+	 * Creates an MtSwiftMessage from a subclass of {@link AbstractMT}.
+	 * @see #MtSwiftMessage(SwiftMessage)
+	 * @since 8.0.2
+	 */
+	public MtSwiftMessage(final AbstractMT mt) {
+		super();
+		Validate.notNull(mt, "the mt message cannot be null");
+		updateFromModel(mt.getSwiftMessage());
+	}
+
+	/**
 	 * Creates an MtSwiftMessage from a SwiftMessage.
-	 * @see #updateFromModel()
+	 * @see #updateFromModel(SwiftMessage)
 	 */
 	public MtSwiftMessage(final SwiftMessage model) {
 		super();
@@ -278,71 +278,21 @@ public class MtSwiftMessage extends AbstractSwiftMessage {
 		Validate.notNull(mt, "the model message cannot be null");
 		updateFromModel(mt.getSwiftMessage());
 	}
-	
-	/**
-	 * @deprecated Use {@link #updateFromModel(SwiftMessage)} or constructor {@link #MtSwiftMessage(SwiftMessage)} instead,
-	 * The internal model message is no longer kept as class attribute to avoid inconsistencies
-	 * between the raw format and the parsed data.
-	 */
-	@Deprecated
-	@ProwideDeprecated(phase4=TargetYear._2018)
-	public void updateFromModel() {
-		DeprecationUtils.phase3(getClass(), "updateFromModel()", "Use updateFromModel(SwiftMessage) or constructor MtSwiftMessage(SwiftMessage) instead.");
-	}
 
 	/**
-	 * @deprecated The internal model message is no longer kept as class attribute to avoid 
-	 * inconsistencies between the raw format and the parsed data. To parse the internal raw
-	 * format into a model object use {@link #modelMessage()} instead of this getter.
-	 */
-	@Deprecated
-	@ProwideDeprecated(phase3=TargetYear._2018)
-	public SwiftMessage getModelMessage() {
-		DeprecationUtils.phase2(getClass(), "getModelMessage()", "Use modelMessage() instead.");
-		return modelMessage();
-	}
-	
-	/**
-	 * Parses the raw message content into a {@linkplain SwiftMessage} object.
-	 * @return the parsed message or <code>null</code> if the raw content is not set or cannot be parsed
+	 * Parses the raw message content into a {@link SwiftMessage} object.
+	 * @return the parsed message or null if the raw content is not set or cannot be parsed
 	 * @since 7.8.9
 	 */
 	public SwiftMessage modelMessage() {
 		if (getMessage() != null) {
-			final SwiftParser parser = new SwiftParser(getMessage());
-			parser.getConfiguration().setLenient(true);
 			try {
-				return parser.message();
+				return SwiftMessage.parse(message());
 			} catch (IOException e) {
 				log.log(Level.WARNING, "error converting FIN text to model: "+e.getMessage(), e);
 			}
 		}
 		return null;
-	}
-
-	/**
-	 * @deprecated The internal model message is no longer kept as class attribute to avoid 
-	 * inconsistencies between the raw format and the parsed data. To update the internal raw
-	 * format from a model object use {@link #updateFromModel(SwiftMessage)} instead of this setter.
-	 */
-	@Deprecated
-	@ProwideDeprecated(phase3=TargetYear._2018)
-	public void setModelMessage(final SwiftMessage modelMessage) {
-		DeprecationUtils.phase2(getClass(), "setModelMessage(SwiftMessage)", "Use updateFromModel(SwiftMessage) instead.");
-		updateFromModel(modelMessage);
-	}
-
-	/**
-	 * Get the message type.<br /> 
-	 * For MTs this is the MT type number present in the identifier attribute. For example for fin.103.STP returns 103
-	 * For MX returns the same as #getIdentifier()
-	 */
-	public String getMessageType() {
-		if (this.identifier != null && isMT()) {
-			return this.identifier.replaceAll("\\D+","");
-		} else {
-			return getIdentifier();
-		}
 	}
 
 	/**
@@ -394,15 +344,11 @@ public class MtSwiftMessage extends AbstractSwiftMessage {
 	 * @return <code>true</code> if this message type is the <code>type</code> given, or <code>false</code> in any other case
 	 */
 	public boolean isType(final int type) {
-		String compare;
-		if (type<10) {
-			compare = "00"+type;
-		} else if (type<100) {
-			compare = "0"+type;
-		} else {
-			compare = StringUtils.EMPTY+type;
+		Integer typeInt = getMessageTypeInt();
+		if (typeInt != null) {
+			return typeInt == type;
 		}
-		return StringUtils.equals(compare, getMessageType());
+		return false;
 	}
 
 	@Override
@@ -412,133 +358,171 @@ public class MtSwiftMessage extends AbstractSwiftMessage {
 		return sb.toString();
 	}
 
+	/**
+	 * Gets PDE (Possible Duplicate Emission) flag from the trailer block or null if the trailer or the PDE field is not present
+	 * @return the PDE flag or null
+	 */
 	public String getPde() {
 		return pde;
 	}
-
+	
+	/**
+	 * Sets the PDE attribute.
+	 * This field is automatically updated on message update from FIN or model
+	 * @see #updateFromFIN(String)
+	 * @see #updateFromModel(AbstractMT)
+	 * @see #updateFromModel(SwiftMessage)
+	 * @param pde the PDE flag to set
+	 */
 	public void setPde(final String pde) {
 		this.pde = pde;
 	}
 
+	/**
+ 	 * Gets PDM from the trailer block or null if the trailer or the PDM field is not present
+	 * @return PDM flag or null
+	 */
 	public String getPdm() {
 		return pdm;
 	}
 
+	/**
+	 * Sets the PDM attribute.
+	 * This field is automatically updated on message update from FIN or model
+	 * @see #updateFromFIN(String)
+	 * @see #updateFromModel(AbstractMT)
+	 * @see #updateFromModel(SwiftMessage)
+	 * @param pdm the PDM flag to set
+	 */
 	public void setPdm(final String pdm) {
 		this.pde = pdm;
 	}
 
+	/**
+	 * Gets the MIR (Message Input Reference)
+	 * @see SwiftMessage#getMIR()
+	 */
 	public String getMir() {
 		return mir;
 	}
 
+	/**
+	 * Sets the MIR attribute.
+	 * This field is automatically updated on message update from FIN or model
+	 * @see #updateFromFIN(String)
+	 * @see #updateFromModel(AbstractMT)
+	 * @see #updateFromModel(SwiftMessage)
+	 * @param mir the MIR to set
+	 */
 	public void setMir(final String mir) {
 		this.mir = mir;
 	}
 
+	/**
+	 * Gets the MUR (Message User Reference) from block 3
+	 * @see SwiftMessage#getMUR()
+	 * @return the MUR or null if not present in the message
+	 */
 	public String getMur() {
 		return mur;
 	}
 
+	/**
+	 * Sets the MUR attribute.
+	 * This field is automatically updated on message update from FIN or model
+	 * @see #updateFromFIN(String)
+	 * @see #updateFromModel(AbstractMT)
+	 * @see #updateFromModel(SwiftMessage)
+	 * @param mur the MUR to set
+	 */
 	public void setMur(final String mur) {
 		this.mur = mur;
 	}
 
+	/**
+	 * Gets a UUID (User Unique Identifier)
+	 * @see SwiftMessage#getUUID()
+	 */
 	public String getUuid() {
 		return uuid;
 	}
 
+	/**
+	 * Sets a UUID
+ 	 * This field is automatically updated on message update from FIN or model
+	 * @see #updateFromFIN(String)
+	 * @see #updateFromModel(AbstractMT)
+	 * @see #updateFromModel(SwiftMessage)
+
+	 * @param uuid
+	 */
 	public void setUuid(final String uuid) {
 		this.uuid = uuid;
 	}
 
 	@Override
-	public int hashCode() {
-		final int prime = 31;
-		int result = super.hashCode();
-		result = prime * result + ((mir == null) ? 0 : mir.hashCode());
-		result = prime * result + ((mur == null) ? 0 : mur.hashCode());
-		result = prime * result + ((pde == null) ? 0 : pde.hashCode());
-		result = prime * result + ((pdm == null) ? 0 : pdm.hashCode());
-		result = prime * result + ((uuid == null) ? 0 : uuid.hashCode());
-		return result;
+	public boolean equals(Object o) {
+		if (this == o) return true;
+		if (o == null || getClass() != o.getClass()) return false;
+		if (!super.equals(o)) return false;
+		MtSwiftMessage that = (MtSwiftMessage) o;
+		return Objects.equals(pde, that.pde) &&
+				Objects.equals(pdm, that.pdm) &&
+				Objects.equals(mir, that.mir) &&
+				Objects.equals(mur, that.mur) &&
+				Objects.equals(uuid, that.uuid);
 	}
 
 	@Override
-	public boolean equals(Object obj) {
-		if (this == obj)
-			return true;
-		if (obj == null)
-			return false;
-		if (!super.equals(obj))
-			return false;
-		if (getClass() != obj.getClass())
-			return false;
-		MtSwiftMessage other = (MtSwiftMessage) obj;
-		if (mir == null) {
-			if (other.mir != null)
-				return false;
-		} else if (!mir.equals(other.mir))
-			return false;
-		if (mur == null) {
-			if (other.mur != null)
-				return false;
-		} else if (!mur.equals(other.mur))
-			return false;
-		if (pde == null) {
-			if (other.pde != null)
-				return false;
-		} else if (!pde.equals(other.pde))
-			return false;
-		if (pdm == null) {
-			if (other.pdm != null)
-				return false;
-		} else if (!pdm.equals(other.pdm))
-			return false;
-		if (uuid == null) {
-			if (other.uuid != null)
-				return false;
-		} else if (!uuid.equals(other.uuid))
-			return false;
-		return true;
+	public int hashCode() {
+		return Objects.hash(super.hashCode(), pde, pdm, mir, mur, uuid);
 	}
 
 	/**
-	 * @deprecated use the constructor {@link #MtSwiftMessage(File)} instead
-	 */
-	@Deprecated
-	@ProwideDeprecated(phase4=TargetYear._2018)
-	public MtSwiftMessage readFile(final File file) throws IOException {
-		DeprecationUtils.phase3(getClass(), "readFile(File)", "Use the constructor MtSwiftMessage(File) instead.");
-		final MtSwiftMessage result = new MtSwiftMessage();
-		result.setModelMessage(new SwiftParser(new FileInputStream(file)).message());
-		result.setMessage(Lib.readFile(file));
-		return result;
-	}
-
-	/**
-	 * copies attributes from this object to the given object
-	 * non inherited copied attributes:
-	 * <ul>
-	 * 		<li>mir</li>
-	 * 		<li>modelMessage</li>
-	 * 		<li>mur</li>
-	 * 		<li>pde</li>
-	 * 		<li>pdm</li>
-	 * 		<li>uuid</li>
-	 * </ul>
-	 * @param msg
+	 * Creates a full copy of the current message object into another message.
+	 * @param msg target message
 	 * @since 7.7
 	 * @see AbstractSwiftMessage#copyTo(AbstractSwiftMessage)
 	 */
 	public void copyTo(final MtSwiftMessage msg) {
-		super.copyTo((AbstractSwiftMessage) msg);
-		// TODO Auto-generated method stub
+		super.copyTo(msg);
 		msg.setMir(getMir());
-		msg.setModelMessage(getModelMessage()); // FIXME revisar vigencia de este atributo
 		msg.setMur(getMur());
 		msg.setPde(getPde());
 		msg.setPdm(getPdm());
 		msg.setUuid(getUuid());
 	}
+
+	/**
+	 * This method deserializes the JSON data into an MT message object.
+	 *
+	 * @since 7.10.3
+	 */
+	public static MtSwiftMessage fromJson(String json){
+		final Gson gson = new GsonBuilder().create();
+		return gson.fromJson(json, MtSwiftMessage.class);
+	}
+
+	/**
+	 * Returns the message type variant
+	 * @return the variant or null if the message has no variant
+	 * @since 7.10.4
+	 */
+	public MTVariant getVariant() {
+		String s = StringUtils.substringAfterLast(this.identifier, ".");
+		if (EnumUtils.isValidEnum(MTVariant.class, s)) {
+			return MTVariant.valueOf(s);
+		}
+		return null;
+	}
+
+	/**
+	 * Returns this message MT identification
+	 * @return the identification object for this message
+	 * @since 7.10.4
+	 */
+	public MtId getMtId() {
+		return new MtId(getMessageType(), getVariant());
+	}
+
 }

@@ -1,47 +1,40 @@
-/*******************************************************************************
- * Copyright (c) 2016 Prowide Inc.
+/*
+ * Copyright 2006-2018 Prowide
  *
- *     This program is free software: you can redistribute it and/or modify
- *     it under the terms of the GNU Lesser General Public License as 
- *     published by the Free Software Foundation, either version 3 of the 
- *     License, or (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *     This program is distributed in the hope that it will be useful,
- *     but WITHOUT ANY WARRANTY; without even the implied warranty of
- *     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  
- *     
- *     Check the LGPL at <http://www.gnu.org/licenses/> for more details.
- *******************************************************************************/
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.prowidesoftware.swift.io;
 
-import java.io.ByteArrayInputStream;
-import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.FileReader;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.Reader;
-import java.io.StringReader;
-import java.util.Iterator;
-import java.util.logging.Logger;
-
-import org.apache.commons.lang.StringUtils;
-import org.apache.commons.lang.Validate;
-
-import com.prowidesoftware.swift.io.parser.SwiftParser;
+import com.prowidesoftware.deprecation.ProwideDeprecated;
+import com.prowidesoftware.deprecation.TargetYear;
 import com.prowidesoftware.swift.model.SwiftMessage;
 import com.prowidesoftware.swift.model.mt.AbstractMT;
+import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.Validate;
+
+import java.io.*;
+import java.util.Iterator;
+import java.util.logging.Logger;
 
 /**
  * Base class for message reader iterators.
  * 
- * @author sebastian@prowidesoftware.com
  * @since 7.8
  */
 public abstract class AbstractReader implements Iterator<String>, Iterable<String> {
 	private static final Logger log = Logger.getLogger(AbstractReader.class.getName());
-	protected Reader reader = null;
+	protected Reader reader;
+	private boolean usedAsIterable = false;
 	
 	/**
 	 * Constructs a reader to read messages from a given Reader instance
@@ -52,7 +45,7 @@ public abstract class AbstractReader implements Iterator<String>, Iterable<Strin
 	
 	/**
 	 * Constructs a reader to read messages from a string
-	 * @throws IllegalArgumentException if string is <code>null</code>
+	 * @throws IllegalArgumentException if string is null
 	 */
 	public AbstractReader(final String string) {
 		Validate.notNull(string, "string must not be null");
@@ -61,7 +54,7 @@ public abstract class AbstractReader implements Iterator<String>, Iterable<Strin
 
 	/**
 	 * Constructs a reader to read messages from a stream
-	 * @throws IllegalArgumentException if stream is <code>null</code>
+	 * @throws IllegalArgumentException if stream is null
 	 */
 	public AbstractReader(final InputStream stream) {
 		Validate.notNull(stream, "stream must not be null");
@@ -70,35 +63,46 @@ public abstract class AbstractReader implements Iterator<String>, Iterable<Strin
 
 	/**
 	 * Constructs a reader to read messages from a file
-	 * @throws IllegalArgumentException if file is <code>null</code>
+	 * @throws IllegalArgumentException if file is null
 	 */
 	public AbstractReader(final File file) throws FileNotFoundException {
 		Validate.notNull(file, "file must not be null");
 		Validate.isTrue(file.exists(), "Non existent file: "+file.getAbsolutePath());
 		this.reader = new FileReader(file);
 	}
-	
-	public Iterator<String> iterator() {
+
+	/**
+	 * @return this object as an Iterator
+	 * @throws IllegalArgumentException if the iteration is attempted more than once
+	 * @deprecated the use of this object as Iterator is discourage because its internal reader can be iterated just once, use it as Iterable instead
+	 */
+	@Deprecated
+	@ProwideDeprecated(phase2 = TargetYear.SRU2020)
+	public Iterator<String> iterator() throws IllegalArgumentException {
+		if (usedAsIterable) {
+			throw new IllegalStateException("This reader has already been used as iterator and the implementation does not support multiple iterations, create another reader instead");
+		}
+		usedAsIterable = true;
 		return this;
 	}
 
 	public abstract String next();
 
+	@Override
 	public void remove() {
-		throw new UnsupportedOperationException("remove not avaiable in this implementation");
+		throw new UnsupportedOperationException("remove() not available in this implementation");
 	}
 	
 	/**
 	 * Reads the next raw content from the iterator and returns the message parsed into an MT.
-	 * <p>IMPORTANT:<br />
+	 * <p>IMPORTANT:<br>
 	 * Since MTnnn model classes are implemented only for system and user-to-user messages 
 	 * (categories 0 to 9) if an ACK/NAK (service id 21) message is found, the MT following 
-	 * the system message is returned (not the ACK/NAK).<br /> 
+	 * the system message is returned (not the ACK/NAK).<br>
 	 * For other service messages (login, select, quit) this method will return null because 
-	 * there is no MT representation to create.<br />
+	 * there is no MT representation to create.<br>
 	 * If you need to deal with all type of messages (including service, system and user-to-user)
-	 * you can use {@linkplain #nextSwiftMessage()} instead. 
-	 * </p> 
+	 * you can use {@link #nextSwiftMessage()} instead.
 	 * 
 	 * @return parsed message or null if content is blank
 	 * @throws IOException if the message content cannot be parsed into an MT
@@ -111,8 +115,7 @@ public abstract class AbstractReader implements Iterator<String>, Iterable<Strin
 				 * message is an ACK/NACK, we parse the appended original message instead
 				 */
 				final String fin = candidate.getUnparsedTexts().getAsFINString();
-				SwiftParser parser = new SwiftParser(new ByteArrayInputStream(fin.getBytes()));
-				return parser.message().toMT();
+				return AbstractMT.parse(fin);
 			} else if (candidate.isServiceMessage()) {
 				log.warning("nextMT in "+getClass().getName()+" is not intended for service messages, use nextSwiftMessage() instead");
 				return null;
@@ -135,8 +138,7 @@ public abstract class AbstractReader implements Iterator<String>, Iterable<Strin
 	public SwiftMessage nextSwiftMessage() throws IOException {
 		final String msg = next();
 		if (StringUtils.isNotBlank(msg)) {
-			SwiftParser parser = new SwiftParser(new ByteArrayInputStream(msg.getBytes()));
-			return parser.message();
+			return SwiftMessage.parse(msg);
 		}
 		log.warning("Ignoring blank message");
 		return null;

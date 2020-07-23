@@ -1,27 +1,23 @@
-/*******************************************************************************
- * Copyright (c) 2016 Prowide Inc.
+/*
+ * Copyright 2006-2018 Prowide
  *
- *     This program is free software: you can redistribute it and/or modify
- *     it under the terms of the GNU Lesser General Public License as 
- *     published by the Free Software Foundation, either version 3 of the 
- *     License, or (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *     This program is distributed in the hope that it will be useful,
- *     but WITHOUT ANY WARRANTY; without even the implied warranty of
- *     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  
- *     
- *     Check the LGPL at <http://www.gnu.org/licenses/> for more details.
- *******************************************************************************/
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.prowidesoftware.swift.model;
 
 
-import java.io.File;
-import java.io.IOException;
-import java.io.InputStream;
-
-import org.apache.commons.lang.StringUtils;
-import org.apache.commons.lang.Validate;
-
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import com.prowidesoftware.deprecation.DeprecationUtils;
 import com.prowidesoftware.deprecation.ProwideDeprecated;
 import com.prowidesoftware.deprecation.TargetYear;
@@ -29,43 +25,62 @@ import com.prowidesoftware.swift.io.parser.MxParser;
 import com.prowidesoftware.swift.model.mx.AbstractMX;
 import com.prowidesoftware.swift.model.mx.BusinessHeader;
 import com.prowidesoftware.swift.model.mx.dic.ApplicationHeader;
-import com.prowidesoftware.swift.utils.Lib;
+import org.apache.commons.lang3.Validate;
+
+import javax.persistence.*;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.Objects;
 
 /**
  * Container of raw representation of an MX (ISO 20022) SWIFT message, intended for message persistence.
- * The class holds the full xml content plus message identification metadata gathered from the application header.<br />
+ * <p>
+ * The class holds the full xml content plus message identification metadata gathered from the application header.
  * 
- * Notice, the scope of Prowide MX model is the message payload (the actual message or body data) which is the fundamental 
+ * <p>
+ * Notice, the scope of Prowide MX model is the message payload (the actual message or body data) which is the fundamental
  * purpose of the transmission. The transmission wrappers (overhead data) are excluded and intentionally ignored if found.
  * 
- * <p>MMX messages are uniquely identify by their business process, message functionality, variant and version.<br />
- * Consider the following example: TREA.001.001.02
+ * <p>
+ * MX messages are uniquely identify by their business process, message functionality, variant and version.<br>
+ * Consider the following example: trea.001.001.02
  * <ul>
- * <li>TREA refers to 'Treasury'</li>
+ * <li>trea refers to 'Treasury'</li>
  * <li>001 refers to 'NDF opening (notification)'</li>
  * <li>001 refers to the variant</li>
  * <li>02 refers to the version message format, in this case version 2 of 'NDF opening' type.</li>
  * </ul>
- * </p>
  * 
- * <p><em>businessProcess</em>: Alphabetic code in four positions (fixed length) identifying the Business Process</p>
- * <p><em>functionality</em>: Alphanumeric code in three positions (fixed length) identifying the Message Functionality</p>
- * <p><em>variant</em>: Numeric code in three positions (fixed length) identifying a particular flavor (variant) of Message Functionality</p>
- * <p><em>version</em>: Numeric code in two positions (fixed length) identifying the version.</p>
+ * <p>
+ * <em>businessProcess</em>: Alphabetic code in four positions (fixed length) identifying the Business Process
+ * <br>
+ * <em>functionality</em>: Alphanumeric code in three positions (fixed length) identifying the Message Functionality
+ * <br>
+ * <em>variant</em>: Numeric code in three positions (fixed length) identifying a particular flavor (variant) of Message Functionality
+ * <br>
+ * <em>version</em>: Numeric code in two positions (fixed length) identifying the version.
  * 
  * @author www.prowidesoftware.com
  * @since 7.0
  */
+@Entity(name = "mx")
+@DiscriminatorValue("mx")
 public class MxSwiftMessage extends AbstractSwiftMessage {
 	private static final long serialVersionUID = -4394356007627575831L;
 	private static final transient java.util.logging.Logger log = java.util.logging.Logger.getLogger(MxSwiftMessage.class.getName());
 
+	@Enumerated(EnumType.STRING)
+	@Column(length = 4, name = "business_process")
 	private MxBusinessProcess businessProcess;
-	
+
+	@Column(length = 3)
 	private String functionality;
-	
+
+	@Column(length = 3)
 	private String variant;
-	
+
+	@Column(length = 2)
 	private String version;
 
 	public MxSwiftMessage() {
@@ -75,7 +90,7 @@ public class MxSwiftMessage extends AbstractSwiftMessage {
 	/**
 	 * Creates a new message reading the message the content from a string. 
 	 * Performs a fast parsing of the header to identify the message 
-	 * and gather metadata information for the object attributes.<br />
+	 * and gather metadata information for the object attributes.<br>
 	 * 
 	 * If the string contains several messages, the whole passed content will be
 	 * save in the message attribute but identification and metadata will be parser
@@ -141,19 +156,17 @@ public class MxSwiftMessage extends AbstractSwiftMessage {
 	
 	/**
 	 * Creates a new message serializing to xml the parameter message object.
-	 * <br />
-	 * If the business header is present, the sender and receiver attributes will be set
-	 * with content from the header; also the internal raw xml will include both
-	 * AppHdr and Document under a root element tag "<message>", as returned by
-	 * {@link AbstractMX#message(String)}
-	 * <br />
-	 * If the header is not present, sender and receiver will be left null and the raw internal
-	 * xml will include just the Document element. 
+	 *
+	 * <p>If the business header is present, the sender and receiver attributes will be set with content from the
+	 * header; also the internal raw XML will include both 'AppHdr' and 'Document' under a default root element tag
+	 * as returned by {@link AbstractMX#message()}
+	 * <br>If the header is not present, sender and receiver will be left null and the raw internal XML will include
+	 * just the 'Document' element.
 	 * 
-	 * @param mx
+	 * @param mx a message object
 	 */
 	public MxSwiftMessage(final AbstractMX mx) {
-		super(mx.message("message"));
+		super(mx.message());
 	}
 	
 	/**
@@ -222,7 +235,7 @@ public class MxSwiftMessage extends AbstractSwiftMessage {
 	 */
 	public void updateFromModel(final AbstractMX mx) {
 		Validate.notNull(mx, "the mx parameter cannot be null");
-		setMessage(mx.message("message", true));
+		setMessage(mx.message());
 		setFileFormat(FileFormat.MX);
 		/*
 		 * update sender, receiver and reference
@@ -265,13 +278,13 @@ public class MxSwiftMessage extends AbstractSwiftMessage {
 		if (h != null) {
 			final String from = h.from();
 			if (from != null) {
-				super.sender = StringUtils.substring(from, 0, 8);
+				super.sender = bic11(from);
 				updated = true;
 			}
 			
 			final String to = h.to();
 			if (to != null) {
-				super.receiver = StringUtils.substring(to, 0, 8);
+				super.receiver = bic11(to);
 				updated = true;
 			}
 			
@@ -290,16 +303,16 @@ public class MxSwiftMessage extends AbstractSwiftMessage {
 	 */
 	private boolean _update(MxNode n) {
 		boolean updated = false;
-		final MxNode groupHeader = n.findFirstByName("GrpHdr");
+		final MxNode groupHeader = n != null? n.findFirstByName("GrpHdr") : null;
 		if (groupHeader != null) {
 			MxNode senderBic = groupHeader.findFirst("./InstgAgt/FinInstnId/BIC");
 			if (senderBic != null) {
-				sender = StringUtils.substring(senderBic.getValue(), 0, 8);
+				sender = bic11(senderBic.getValue());
 				updated = true;
 			}
 			MxNode receiverBic = groupHeader.findFirst("./InstdAgt/FinInstnId/BIC");
 			if (receiverBic != null) {
-				receiver = StringUtils.substring(receiverBic.getValue(), 0, 8);
+				receiver = bic11(receiverBic.getValue());
 				updated = true;
 			}
 			MxNode reference = groupHeader.findFirst("./MsgId");
@@ -344,93 +357,20 @@ public class MxSwiftMessage extends AbstractSwiftMessage {
 	}
 
 	@Override
-	public int hashCode() {
-		final int prime = 31;
-		int result = super.hashCode();
-		result = prime * result
-				+ ((businessProcess == null) ? 0 : businessProcess.hashCode());
-		result = prime * result
-				+ ((functionality == null) ? 0 : functionality.hashCode());
-		result = prime * result + ((variant == null) ? 0 : variant.hashCode());
-		result = prime * result + ((version == null) ? 0 : version.hashCode());
-		return result;
+	public boolean equals(Object o) {
+		if (this == o) return true;
+		if (o == null || getClass() != o.getClass()) return false;
+		if (!super.equals(o)) return false;
+		MxSwiftMessage that = (MxSwiftMessage) o;
+		return businessProcess == that.businessProcess &&
+				Objects.equals(functionality, that.functionality) &&
+				Objects.equals(variant, that.variant) &&
+				Objects.equals(version, that.version);
 	}
 
 	@Override
-	public boolean equals(Object obj) {
-		if (this == obj)
-			return true;
-		if (obj == null)
-			return false;
-		if (!super.equals(obj))
-			return false;
-		if (getClass() != obj.getClass())
-			return false;
-		MxSwiftMessage other = (MxSwiftMessage) obj;
-		if (businessProcess != other.businessProcess)
-			return false;
-		if (functionality == null) {
-			if (other.functionality != null)
-				return false;
-		} else if (!functionality.equals(other.functionality))
-			return false;
-		if (variant == null) {
-			if (other.variant != null)
-				return false;
-		} else if (!variant.equals(other.variant))
-			return false;
-		if (version == null) {
-			if (other.version != null)
-				return false;
-		} else if (!version.equals(other.version))
-			return false;
-		return true;
-	}
-
-    /**
-     * @deprecated use the constructor {@link #MxSwiftMessage(File)} instead
-     */
-	@Deprecated
-	@ProwideDeprecated(phase4=TargetYear._2018)
-    public MxSwiftMessage readFile(File file) throws IOException {
-		DeprecationUtils.phase3(getClass(), "readFile(File)", "Use the constructor MxSwiftMessage(File) instead.");
-        MxSwiftMessage result = new MxSwiftMessage();
-        result.setMessage(Lib.readFile(file));
-        result.setFilename(file.getAbsolutePath());
-        return result;
-    }
-	
-	/**
-	 * @deprecated The internal metadata is set automatically from the message content when
-	 * the object is constructed from String, File or Stream. This should not be updated from
-	 * a decoupled namespace String to avoid inconsistencies between the stored raw message content
-	 * and the metadata.
-	 */
-	@Deprecated
-	@ProwideDeprecated(phase3=TargetYear._2018)
-	protected void setDataFromNamespace(String namespace) {
-		DeprecationUtils.phase3(getClass(), "setDataFromNamespace(String)", "The internal metadata is set automatically from the message content when the object is constructed from String, File or Stream.");
-		Validate.notNull(namespace, "namespace can not be null");
-		final String[] tokens = StringUtils.split(namespace, '.');
-		if (tokens == null || tokens.length<4) {
-			throw new IllegalArgumentException("Expected at least 4 tokens in namespace '"+namespace+"'");
-		}
-		// always last 4 tokens
-		final String bp = tokens[tokens.length-4]; 
-		final String func = tokens[tokens.length-3]; 
-		final String var = tokens[tokens.length-2]; 
-		final String ver = tokens[tokens.length-1];
-		
-		final MxBusinessProcess bpEnum;
-		try {
-			bpEnum = MxBusinessProcess.valueOf(bp);
-		} catch (Exception e) {
-			throw new IllegalArgumentException("Unknown business process '"+bp+"'", e);
-		}
-		setBusinessProcess(bpEnum);
-		setFunctionality(func);
-		setVariant(var);
-		setVersion(ver);
+	public int hashCode() {
+		return Objects.hash(super.hashCode(), businessProcess, functionality, variant, version);
 	}
 
 	/**
@@ -453,7 +393,9 @@ public class MxSwiftMessage extends AbstractSwiftMessage {
 	 * @deprecated use #getBusinessHeader() instead 
 	 */
 	@Deprecated
+	@ProwideDeprecated(phase3=TargetYear.SRU2020)
 	public ApplicationHeader getApplicationHeader() {
+		DeprecationUtils.phase2(getClass(), "getApplicationHeader()", "use getBusinessHeader() instead");
 		MxParser parser = new MxParser(this.message());
 		BusinessHeader h = parser.parseBusinessHeader();
 		if (h != null && h.getApplicationHeader() != null) {
@@ -468,24 +410,21 @@ public class MxSwiftMessage extends AbstractSwiftMessage {
 	 * @deprecated @see #getApplicationHeader()
 	 */
 	@Deprecated
+	@ProwideDeprecated(phase3=TargetYear.SRU2020)
 	public void setApplicationHeader(ApplicationHeader applicationHeader) {
-		log.warning("Obsolete API call. The application header is no longer stored as class attribute in "+getClass().getName());
+		String message = "Obsolete API call. The application header is no longer stored as class attribute in "+getClass().getName();
+		DeprecationUtils.phase2(getClass(), "setApplicationHeader(ApplicationHeader)", message);
 	}
 	
 	/**
-	 * copies attributes from this object to the given object
-	 * non inherited copied attributes:
-	 * <ul>
-	 * 		<li>functionality</li>
-	 * 		<li>variant</li>
-	 * 		<li>version</li>
-	 * </ul>
-	 * @param msg
+	 * Creates a full copy of the current message object into another message.
+	 * @param msg target message
 	 * @since 7.7
 	 * @see AbstractSwiftMessage#copyTo(AbstractSwiftMessage)
 	 */
 	public void copyTo(MxSwiftMessage msg) {
-	    super.copyTo((AbstractSwiftMessage)msg);
+	    super.copyTo(msg);
+	    msg.setBusinessProcess(getBusinessProcess());
 	    msg.setFunctionality(getFunctionality());
 	    msg.setVariant(getVariant());
 	    msg.setVersion(getVersion());
@@ -499,6 +438,25 @@ public class MxSwiftMessage extends AbstractSwiftMessage {
 		final StringBuilder sb = new StringBuilder();
 		sb.append("MxSwiftMessage id=").append(getId()).append(" message=").append(getMessage());
 		return sb.toString();
+	}
+
+	/**
+	 * This method deserializes the JSON data into an MX message object.
+	 * @see #toJson()
+	 * @since 7.10.3
+	 */
+	public static MxSwiftMessage fromJson(String json){
+		final Gson gson = new GsonBuilder().create();
+		return gson.fromJson(json, MxSwiftMessage.class);
+	}
+
+	/**
+	 * Returns this message MX identification
+	 * @return the identification object for this message
+	 * @since 7.10.4
+	 */
+	public MxId getMxId() {
+		return new MxId(this.businessProcess, this.functionality, this.variant, this.version);
 	}
 
 }

@@ -1,26 +1,30 @@
-/*******************************************************************************
- * Copyright (c) 2016 Prowide Inc.
+/*
+ * Copyright 2006-2018 Prowide
  *
- *     This program is free software: you can redistribute it and/or modify
- *     it under the terms of the GNU Lesser General Public License as 
- *     published by the Free Software Foundation, either version 3 of the 
- *     License, or (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *     This program is distributed in the hope that it will be useful,
- *     but WITHOUT ANY WARRANTY; without even the implied warranty of
- *     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  
- *     
- *     Check the LGPL at <http://www.gnu.org/licenses/> for more details.
- *******************************************************************************/
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.prowidesoftware.swift.model;
 
 import com.prowidesoftware.swift.model.mt.MTVariant;
+import org.apache.commons.lang3.StringUtils;
+
+import java.util.Objects;
 
 /**
  * Class for identification of MT messages.
  * <br >
  * Composed by the business process, message type and variant or message user group (MUG).
- * <br />
+ * <br>
  * The business process is currently set to a fixed value "fin", however it is kept as
  * class attribute because eventually could be used also for "apc".
  * 
@@ -34,7 +38,7 @@ public class MtId {
 
 	/**
 	 * Creates an identification given the message type, with no variant. 
-	 * @param messageType the message type number
+	 * @param messageType the message type number (optionally prefixed with "fin.")
 	 * @since 7.8.6
 	 */
 	public MtId(String messageType) {
@@ -42,12 +46,16 @@ public class MtId {
 	}
 	
 	/**
-	 * @param messageType the message type number
+	 * @param messageType the message type number (optionally prefixed with "fin.")
 	 * @param variant An MT variant (STP, REMIT, COV), a MUG identifier or null if none applies
 	 */
 	public MtId(String messageType, String variant) {
 		super();
-		this.messageType = messageType;
+		if (StringUtils.startsWith(messageType, "fin.")) {
+			this.messageType = StringUtils.substringAfter(messageType, "fin.");
+		} else {
+			this.messageType = messageType;
+		}
 		this.variant = variant;
 	}
 
@@ -111,46 +119,35 @@ public class MtId {
 		return sb.toString();
 	}
 
-	/**
-	 * @since 7.8.6
-	 */
+	@Override
+	public boolean equals(Object o) {
+		if (this == o) return true;
+		if (o == null || getClass() != o.getClass()) return false;
+		MtId mtId = (MtId) o;
+		return Objects.equals(businessProcess, mtId.businessProcess) &&
+				Objects.equals(messageType, mtId.messageType) &&
+				Objects.equals(variant, mtId.variant);
+	}
+
 	@Override
 	public int hashCode() {
-		final int prime = 31;
-		int result = 1;
-		result = prime * result + ((businessProcess == null) ? 0 : businessProcess.hashCode());
-		result = prime * result + ((messageType == null) ? 0 : messageType.hashCode());
-		result = prime * result + ((variant == null) ? 0 : variant.hashCode());
-		return result;
+		return Objects.hash(businessProcess, messageType, variant);
 	}
 
 	/**
-	 * @since 7.8.6
+	 * Returns the first number in the message type, representing the message category.
+	 * For example for 103 returns 1
+	 * @return the message category number or empty if the message type is invalid or not present
+	 * @since 7.10.4
 	 */
-	@Override
-	public boolean equals(Object obj) {
-		if (this == obj)
-			return true;
-		if (obj == null)
-			return false;
-		if (getClass() != obj.getClass())
-			return false;
-		MtId other = (MtId) obj;
-		if (businessProcess == null) {
-			if (other.businessProcess != null)
-				return false;
-		} else if (!businessProcess.equals(other.businessProcess))
-			return false;
-		if (messageType == null) {
-			if (other.messageType != null)
-				return false;
-		} else if (!messageType.equals(other.messageType))
-			return false;
-		if (variant == null) {
-			if (other.variant != null)
-				return false;
-		} else if (!variant.equals(other.variant))
-			return false;
-		return true;
+	public String category() {
+		if (messageType != null && messageType.length() > 0) {
+			char cat = messageType.charAt(0);
+			if (Character.isDigit(cat)) {
+				return String.valueOf(cat);
+			}
+		}
+		return "";
 	}
+
 }

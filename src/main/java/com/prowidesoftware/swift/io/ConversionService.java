@@ -1,85 +1,58 @@
-/*******************************************************************************
- * Copyright (c) 2016 Prowide Inc.
+/*
+ * Copyright 2006-2018 Prowide
  *
- *     This program is free software: you can redistribute it and/or modify
- *     it under the terms of the GNU Lesser General Public License as 
- *     published by the Free Software Foundation, either version 3 of the 
- *     License, or (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *     This program is distributed in the hope that it will be useful,
- *     but WITHOUT ANY WARRANTY; without even the implied warranty of
- *     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  
- *     
- *     Check the LGPL at <http://www.gnu.org/licenses/> for more details.
- *******************************************************************************/
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.prowidesoftware.swift.io;
 
-import java.io.BufferedReader;
-import java.io.ByteArrayInputStream;
-import java.io.IOException;
-import java.io.StringReader;
-import java.io.StringWriter;
-
-import org.apache.commons.lang.Validate;
-
-import com.prowidesoftware.swift.WifeException;
-import com.prowidesoftware.swift.io.parser.SwiftParser;
+import com.prowidesoftware.ProwideException;
 import com.prowidesoftware.swift.io.parser.XMLParser;
-import com.prowidesoftware.swift.io.writer.FINWriterVisitor;
 import com.prowidesoftware.swift.io.writer.SwiftWriter;
+import com.prowidesoftware.swift.io.writer.XMLWriterVisitor;
 import com.prowidesoftware.swift.model.SwiftMessage;
+import org.apache.commons.lang3.Validate;
+
+import java.io.IOException;
+import java.io.StringWriter;
 
 
 /**
  * This interface provides a general conversion service between three different formats:
  * <ul>
- * 	<li><b>FIN</b>: SWIFT message format as used by SWIFTNet (ISO 15022 compliance).</li>
- *  <li><b>XML</b>: WIFE's XML representation of SWIFT messages.</li>
- *  <li><b>SwiftMessage</b>: WIFE's java object model of SWIFT messages.</li>
+ * 	<li><b>FIN</b>: SWIFT raw format for MT messages (ISO 15022).</li>
+ *  <li><b>XML</b>: A proprietary XML representation of SWIFT MT messages.</li>
+ *  <li><b>SwiftMessage</b>: Java model of SWIFT MT messages.</li>
  * </ul>
- * <p>This class may be used as a serializer.</p>
- * <p>All methods in this class are <b>threadsafe</b>.</p>
- *
- * @author www.prowidesoftware.com
+ * <p>This class may be used as a serializer.
+ * <p>All methods in this class are <b>threadsafe</b>.
  */
 public class ConversionService implements IConversionService {
-	private static final transient java.util.logging.Logger log = java.util.logging.Logger.getLogger(ConversionService.class.getName());
 
 	/**
 	 * Given a SwiftMessage object returns a String containing its SWIFT message representation.
+	 * <p>The implementation ensures all line breaks use CRLF, and ignores all empty blocks.
 	 *
 	 * @see com.prowidesoftware.swift.io.IConversionService#getFIN(com.prowidesoftware.swift.model.SwiftMessage)
 	 */
 	public String getFIN(final SwiftMessage msg) {
 		Validate.notNull(msg);
-		final SwiftWriter w = new SwiftWriter();
-		final StringWriter writer = new StringWriter();
-		w.writeMessage(msg, writer);
-		final String fin = writer.getBuffer().toString();
-		return ensureEols(fin);
-	}
 
-	/**
-	 * Make sure all EOLs are swift compatible
-	 * @return an empty or incomplete string if an error occurs
-	 */
-	private static String ensureEols(final String result) {
-		final StringBuilder buf = new StringBuilder();
-		try {
-			final BufferedReader r = new BufferedReader(new StringReader(result));
-			String l;
-			while ((l=r.readLine()) != null) {
-				buf.append(l).append(FINWriterVisitor.SWIFT_EOL);
-			}
-		} catch (final Exception e) {
-			log.severe("Error in EOL correction: "+e);
-		}
-		if (buf.length() > 0) {
-			//remove the last EOL inserted
-			return buf.substring(0, buf.length()-FINWriterVisitor.SWIFT_EOL.length());
-		} else {
-			return "";
-		}
+		final StringWriter writer = new StringWriter();
+		SwiftWriter.writeMessage(msg, writer, true);
+		final String fin = writer.getBuffer().toString();
+
+		// ensure EOLs in the result
+		return SwiftWriter.ensureEols(fin);
 	}
 
 	/**
@@ -92,7 +65,7 @@ public class ConversionService implements IConversionService {
 		Validate.notNull(xml);
 		final SwiftMessage msg = getMessageFromXML(xml);
 		if (msg == null) {
-			throw new WifeException("parsed SwiftMessage from XML is null");
+			throw new ProwideException("parsed SwiftMessage from XML is null");
 		}
 		return getFIN(msg);
 	}
@@ -112,7 +85,9 @@ public class ConversionService implements IConversionService {
 	 */
 	public String getXml(final SwiftMessage msg, final boolean useField) {
 		Validate.notNull(msg);
-		return msg.toXml();
+		final StringWriter w = new StringWriter();
+		msg.visit(new XMLWriterVisitor(w, useField));
+		return w.getBuffer().toString();
 	}
 
 	/**
@@ -143,11 +118,10 @@ public class ConversionService implements IConversionService {
 	 */
 	public SwiftMessage getMessageFromFIN(final String fin) {
 		Validate.notNull(fin);
-		final SwiftParser p = new SwiftParser(new ByteArrayInputStream(fin.getBytes()));
 		try {
-			return p.message();
+			return SwiftMessage.parse(fin);
 		} catch (final IOException e) {
-			throw new WifeException(e+" during parse of message");
+			throw new ProwideException(e+" during parse of message");
 		}
 	}
 

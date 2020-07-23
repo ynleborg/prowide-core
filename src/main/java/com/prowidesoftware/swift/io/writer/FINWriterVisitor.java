@@ -1,42 +1,35 @@
-/*******************************************************************************
- * Copyright (c) 2016 Prowide Inc.
+/*
+ * Copyright 2006-2018 Prowide
  *
- *     This program is free software: you can redistribute it and/or modify
- *     it under the terms of the GNU Lesser General Public License as 
- *     published by the Free Software Foundation, either version 3 of the 
- *     License, or (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *     This program is distributed in the hope that it will be useful,
- *     but WITHOUT ANY WARRANTY; without even the implied warranty of
- *     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  
- *     
- *     Check the LGPL at <http://www.gnu.org/licenses/> for more details.
- *******************************************************************************/
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.prowidesoftware.swift.io.writer;
+
+import com.prowidesoftware.ProwideException;
+import com.prowidesoftware.swift.model.*;
+import com.prowidesoftware.swift.utils.IMessageVisitor;
+import org.apache.commons.lang3.StringUtils;
 
 import java.io.IOException;
 import java.io.Writer;
 import java.util.logging.Level;
 
-import org.apache.commons.lang.StringUtils;
-
-import com.prowidesoftware.swift.WifeException;
-import com.prowidesoftware.swift.model.SwiftBlock;
-import com.prowidesoftware.swift.model.SwiftBlock1;
-import com.prowidesoftware.swift.model.SwiftBlock2;
-import com.prowidesoftware.swift.model.SwiftBlock3;
-import com.prowidesoftware.swift.model.SwiftBlock4;
-import com.prowidesoftware.swift.model.SwiftBlock5;
-import com.prowidesoftware.swift.model.SwiftBlockUser;
-import com.prowidesoftware.swift.model.SwiftMessage;
-import com.prowidesoftware.swift.model.Tag;
-import com.prowidesoftware.swift.model.UnparsedTextList;
-import com.prowidesoftware.swift.utils.IMessageVisitor;
-
 /**
  * Main class for writing SwiftMessage objects into SWIFT FIN message text.
- * 
- * @author www.prowidesoftware.com
+ *
+ * <p>The implementation preserves the EOLS as they are found in the message object. This is particularly important for
+ * block 4 where fields can have multiple lines. To serialize into a compliant FIN text you can apply
+ * {@link SwiftWriter#ensureEols(String)} to the result.
  */
 public class FINWriterVisitor implements IMessageVisitor {
 	private static final transient java.util.logging.Logger log = java.util.logging.Logger.getLogger(FINWriterVisitor.class.getName());
@@ -47,7 +40,24 @@ public class FINWriterVisitor implements IMessageVisitor {
 	public static final String SWIFT_EOL = "\r\n";
 
 	private Writer  writer;
-	private Boolean block4asText = Boolean.TRUE;
+	private boolean block4asText = true;
+	private boolean trimTagValues = false;
+
+	/**
+	 * @return true if the visitor is setup to trim tag values
+	 * @since 8.0.2
+	 */
+	public boolean isTrimTagValues() {
+		return trimTagValues;
+	}
+
+	/**
+	 * @param trimTagValues true if the visitor should trim tag values (it is false by default)
+	 * @since 8.0.2
+	 */
+	public void setTrimTagValues(boolean trimTagValues) {
+		this.trimTagValues = trimTagValues;
+	}
 
 	/**
 	 * @param writer
@@ -64,7 +74,7 @@ public class FINWriterVisitor implements IMessageVisitor {
 	public void startMessage(SwiftMessage m) {
 
 		// initialize status
-		this.block4asText = Boolean.TRUE;
+		this.block4asText = true;
 
 		// If app identifier NOT 'F' OR service identifier NOT '01'  	=> USE TAG-BLOCK  syntax
 		// If message type is category 0                      			=> USE TAG-BLOCK  syntax
@@ -74,9 +84,10 @@ public class FINWriterVisitor implements IMessageVisitor {
 		// if b1 not empty
 		if (b1 != null && StringUtils.isNotEmpty(b1.getValue())) {
 			// check for app id and service id
-			if (!StringUtils.equals(b1.getApplicationId(), "F") || !StringUtils.equals(b1.getServiceId(), "01")) {
+			boolean isAppIdOrServiceId = !StringUtils.equals(b1.getApplicationId(), "F") || !StringUtils.equals(b1.getServiceId(), "01");
+			if (isAppIdOrServiceId) {
 				// if app identifier NOT 'F' OR service identifier NOT '01' => USE TAG-BLOCK syntax
-				this.block4asText = Boolean.FALSE;
+				this.block4asText = false;
 			}
 		}
 		
@@ -87,7 +98,7 @@ public class FINWriterVisitor implements IMessageVisitor {
 			String mt = StringUtils.trimToEmpty(b2.getMessageType());
 			if (mt.startsWith("0")) {
 				// if message type is category 0 => USE TAG-BLOCK  syntax
-				this.block4asText = Boolean.FALSE;
+				this.block4asText = false;
 			}
 		}
 	}
@@ -99,11 +110,11 @@ public class FINWriterVisitor implements IMessageVisitor {
 		// IMPORTANT: do not just "write(m.getUnparsedTexts())" because this latest method actually
 		//            creates the object if not already there. Guard this with the size "if" that is
 		//            safe (returns 0 if there is no list or real size otherwise).
-		if (m.getUnparsedTextsSize().intValue() > 0)
+		if (m.getUnparsedTextsSize() > 0)
 			write(m.getUnparsedTexts());
 
 		// cleanup status
-		this.block4asText = Boolean.TRUE;
+		this.block4asText = true;
 	}
 
 	////////////////////////////////////////////////////////////
@@ -128,7 +139,7 @@ public class FINWriterVisitor implements IMessageVisitor {
 		// IMPORTANT: do not just "write(m.getUnparsedTexts())" because this latest method actually
 		//            creates the object if not already there. Guard this with the size "if" that is
 		//            safe (returns 0 if there is no list or real size otherwise).
-		if (b.getUnparsedTextsSize().intValue() > 0)
+		if (b.getUnparsedTextsSize() > 0)
 			write(b.getUnparsedTexts());
 
 		// write block termination
@@ -157,7 +168,7 @@ public class FINWriterVisitor implements IMessageVisitor {
 		// IMPORTANT: do not just "write(m.getUnparsedTexts())" because this latest method actually
 		//            creates the object if not already there. Guard this with the size "if" that is
 		//            safe (returns 0 if there is no list or real size otherwise).
-		if (b.getUnparsedTextsSize().intValue() > 0)
+		if (b.getUnparsedTextsSize() > 0)
 			write(b.getUnparsedTexts());
 
 		// write block termination
@@ -184,7 +195,7 @@ public class FINWriterVisitor implements IMessageVisitor {
 		// IMPORTANT: do not just "write(m.getUnparsedTexts())" because this latest method actually
 		//            creates the object if not already there. Guard this with the size "if" that is
 		//            safe (returns 0 if there is no list or real size otherwise).
-		if (b.getUnparsedTextsSize().intValue() > 0)
+		if (b.getUnparsedTextsSize() > 0)
 			write(b.getUnparsedTexts());
 
 		// write block termination
@@ -197,11 +208,11 @@ public class FINWriterVisitor implements IMessageVisitor {
 	//
 	////////////////////////////////////////////////////////////
 	public void startBlock4(SwiftBlock4 b) {
-		write("{4:" + (this.block4asText.booleanValue() ? SWIFT_EOL : ""));
+		write("{4:" + (this.block4asText ? SWIFT_EOL : ""));
 	}
 
 	public void tag(SwiftBlock4 b, Tag t) {
-		if (this.block4asText.booleanValue()) {
+		if (this.block4asText) {
 			appendTextTag(t);
 		} else {
 			appendBlockTag(t);
@@ -215,11 +226,11 @@ public class FINWriterVisitor implements IMessageVisitor {
 		// IMPORTANT: do not just "write(m.getUnparsedTexts())" because this latest method actually
 		//            creates the object if not already there. Guard this with the size "if" that is
 		//            safe (returns 0 if there is no list or real size otherwise).
-		if (b.getUnparsedTextsSize().intValue() > 0)
+		if (b.getUnparsedTextsSize() > 0)
 			write(b.getUnparsedTexts());
 
 		// write block termination
-		write( (this.block4asText.booleanValue() ? "-" : "") + "}");
+		write( (this.block4asText ? "-" : "") + "}");
 	}
 
 	////////////////////////////////////////////////////////////
@@ -242,7 +253,7 @@ public class FINWriterVisitor implements IMessageVisitor {
 		// IMPORTANT: do not just "write(m.getUnparsedTexts())" because this latest method actually
 		//            creates the object if not already there. Guard this with the size "if" that is
 		//            safe (returns 0 if there is no list or real size otherwise).
-		if (b.getUnparsedTextsSize().intValue() > 0)
+		if (b.getUnparsedTextsSize() > 0)
 			write(b.getUnparsedTexts());
 
 		// write block termination
@@ -269,7 +280,7 @@ public class FINWriterVisitor implements IMessageVisitor {
 		// IMPORTANT: do not just "write(m.getUnparsedTexts())" because this latest method actually
 		//            creates the object if not already there. Guard this with the size "if" that is
 		//            safe (returns 0 if there is no list or real size otherwise).
-		if (b.getUnparsedTextsSize().intValue() > 0)
+		if (b.getUnparsedTextsSize() > 0)
 			write(b.getUnparsedTexts());
 
 		// write block termination
@@ -303,20 +314,21 @@ public class FINWriterVisitor implements IMessageVisitor {
 	// INTERNAL METHODS
 	//
 	////////////////////////////////////////////////////////////
-	private final void appendBlockTag(Tag t) {
+	private void appendBlockTag(Tag t) {
 		// this goes: "{<tag>:<value>}" (quotes not included)
 		
 		// empty tags are not written
 		if (StringUtils.isEmpty(t.getName()) && StringUtils.isEmpty(t.getValue())) {
 			return;
 		}
-		
+
+		// we don't trim the value to preserve trailing spaces, but we avoid printing null
 		if (StringUtils.isNotEmpty(t.getName())) {
 			// we have name
-			write("{" + t.getName() + ":" + t.getValue());
+			write("{" + t.getName() + ":" + notNullValue(t));
 		} else {
 			// no name but value => {<value>}
-			write("{" + t.getValue());
+			write("{" + notNullValue(t));
 		}
 
 		// if tag has unparsed texts, write them down.
@@ -325,17 +337,35 @@ public class FINWriterVisitor implements IMessageVisitor {
 		// IMPORTANT: do not just "write(m.getUnparsedTexts())" because this latest method actually
 		//            creates the object if not already there. Guard this with the size "if" that is
 		//            safe (returns 0 if there is no list or real size otherwise).
-		if (t.getUnparsedTextsSize().intValue() > 0)
+		if (t.getUnparsedTextsSize() > 0)
 			write(t.getUnparsedTexts());
 		
 		// write closing braquets
 		write("}");
 	}
-	
-	private final void appendTextTag(Tag t) {
+
+	/**
+	 * Returns the tag value ensuring it is not null, if the value is null it will be printed as empty.
+	 * Depending on the parameter of {@link #setTrimTagValues(boolean)} the value will also be trimmed.
+	 */
+	private String notNullValue(Tag t) {
+		if (this.trimTagValues) {
+			// trim all values
+			return StringUtils.trimToEmpty(t.getValue());
+		} else if (t.getValue() == null) {
+			// avoid null
+			return "";
+		} else {
+			// preserve if not null and trim is not explicitly required
+			return t.getValue();
+		}
+	}
+
+	private void appendTextTag(Tag t) {
 		// this goes: ":<tag>:<value>[CRLF]" (quotes not included)
 		if (StringUtils.isNotEmpty(t.getName())) {
-			write(":" + t.getName() + ":" + StringUtils.trimToEmpty(t.getValue()) + SWIFT_EOL);
+			// we don't trim the value to preserve trailing spaces, but we avoid printing null
+			write(":" + t.getName() + ":" + notNullValue(t) + SWIFT_EOL);
 		}
 
 		// if tag has unparsed texts, write them down
@@ -343,7 +373,7 @@ public class FINWriterVisitor implements IMessageVisitor {
 		// IMPORTANT: do not just "write(m.getUnparsedTexts())" because this latest method actually
 		//            creates the object if not already there. Guard this with the size "if" that is
 		//            safe (returns 0 if there is no list or real size otherwise).
-		if (t.getUnparsedTextsSize().intValue() > 0) {
+		if (t.getUnparsedTextsSize() > 0) {
 			write(t.getUnparsedTexts());
 		}
 	}
@@ -358,7 +388,7 @@ public class FINWriterVisitor implements IMessageVisitor {
 	 */
 	protected String getTagValue(final Tag t, final int block) {
 		/*
-		 * If the value starts with blocknumber and the tag is unnamed,
+		 * If the value starts with block number and the tag is unnamed,
 		 * assume is block data and avoid repeating block number 
 		 */
 		String s = t.getValue();
@@ -370,10 +400,10 @@ public class FINWriterVisitor implements IMessageVisitor {
 
 	private void write(UnparsedTextList texts) {
 		// write the unparsed texts (if any)
-		if (texts.size().intValue() > 0) {
-			for(int i = 0; i < texts.size().intValue(); i++) {
-				if (texts.isMessage(Integer.valueOf(i)).booleanValue())
-					write(texts.getText(Integer.valueOf(i)));
+		if (texts.size() > 0) {
+			for(int i = 0; i < texts.size(); i++) {
+				if (texts.isMessage(i))
+					write(texts.getText(i));
 			}
 		}
 	}
@@ -383,7 +413,7 @@ public class FINWriterVisitor implements IMessageVisitor {
 			writer.write(s);
 		} catch (IOException e) {
 			log.log(Level.SEVERE, "Caught exception in FINWriterVisitor, method write", e);
-			throw new WifeException(e);
+			throw new ProwideException(e);
 		}
 	}
 

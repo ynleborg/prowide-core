@@ -1,30 +1,34 @@
-/*******************************************************************************
- * Copyright (c) 2016 Prowide Inc.
+/*
+ * Copyright 2006-2018 Prowide
  *
- *     This program is free software: you can redistribute it and/or modify
- *     it under the terms of the GNU Lesser General Public License as 
- *     published by the Free Software Foundation, either version 3 of the 
- *     License, or (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *     This program is distributed in the hope that it will be useful,
- *     but WITHOUT ANY WARRANTY; without even the implied warranty of
- *     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  
- *     
- *     Check the LGPL at <http://www.gnu.org/licenses/> for more details.
- *******************************************************************************/
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.prowidesoftware.swift.model;
 
+import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import org.apache.commons.lang.StringUtils;
-import org.apache.commons.lang.Validate;
+import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.Validate;
 
 /**
- * Class for identification of MX messages.<br >
- * Composed by the business process (business area), functionality (message type), variant and version.
+ * Class for identification of MX messages.
  *
- * @author miguel@prowidesoftware.com
+ * <p>It is composed by the business process (business area), functionality (message type), variant and version.
+ * For a better understanding of ISO 20022 variants check https://www.iso20022.org/variants.page
+ *
+ * @author miguel
  * @since 7.7
  */
 public class MxId {
@@ -41,8 +45,10 @@ public class MxId {
 		this.version = StringUtils.EMPTY;
 	}
 	/**
-	 * Creates a new object getting data from a targetnamespace
-	 * @param namespace
+	 * Creates a new object getting data from an MX message namespace.
+	 * <p>The implementation parses the namespace using a regex to detect the message type part.
+	 *
+	 * @param namespace a complete or partial namespace such as "urn:iso:std:iso:20022:tech:xsd:pain.001.001.03" or just "pain.001.001.03"
 	 * @throws IllegalArgumentException if namespace parameter cannot be parsed as MX identification
 	 */
 	public MxId(final String namespace) {
@@ -63,11 +69,15 @@ public class MxId {
 		}
 	}
 
-	public MxId(final String bpString, final String funString, final String varString, final String verString) {
-		this.businessProcess = MxBusinessProcess.valueOf(bpString);
+	public MxId(final MxBusinessProcess businessProcess, final String funString, final String varString, final String verString) {
+		this.businessProcess = businessProcess;
 		this.functionality = funString;
 		this.variant = varString;
 		this.version = verString;
+	}
+
+	public MxId(final String bpString, final String funString, final String varString, final String verString) {
+		this(MxBusinessProcess.valueOf(bpString), funString, varString, verString);
 	}
 
 	/**
@@ -77,8 +87,10 @@ public class MxId {
 	public MxBusinessProcess getBusinessProcess() {
 		return businessProcess;
 	}
-	public void setBusinessProcess(final MxBusinessProcess businessProcess) {
+
+	public MxId setBusinessProcess(final MxBusinessProcess businessProcess) {
 		this.businessProcess = businessProcess;
+		return this;
 	}
 	
 	/**
@@ -88,20 +100,28 @@ public class MxId {
 	public String getFunctionality() {
 		return functionality;
 	}
-	public void setFunctionality(final String functionality) {
+
+	public MxId setFunctionality(final String functionality) {
 		this.functionality = functionality;
+		return this;
 	}
+
 	public String getVariant() {
 		return variant;
 	}
-	public void setVariant(final String variant) {
+
+	public MxId setVariant(final String variant) {
 		this.variant = variant;
+		return this;
 	}
+
 	public String getVersion() {
 		return version;
 	}
-	public void setVersion(final String version) {
+
+	public MxId setVersion(final String version) {
 		this.version = version;
+		return this;
 	}
 
 	public String camelized() {
@@ -139,7 +159,7 @@ public class MxId {
 
 	/**
 	 * Get a string in the form of businessprocess.functionality.variant.version
-	 * @return a string with the MX message type identification
+	 * @return a string with the MX message type identification or null if any of the properties is null
 	 * @since 7.7
 	 */
 	public String id() {
@@ -171,51 +191,61 @@ public class MxId {
 	public String toString() {
 		return id();
 	}
-	
-	/**
-	 * @since 7.8.8
-	 */
+
+	@Override
+	public boolean equals(Object o) {
+		if (this == o) return true;
+		if (o == null || getClass() != o.getClass()) return false;
+		MxId mxId = (MxId) o;
+		return businessProcess == mxId.businessProcess &&
+				Objects.equals(functionality, mxId.functionality) &&
+				Objects.equals(variant, mxId.variant) &&
+				Objects.equals(version, mxId.version);
+	}
+
 	@Override
 	public int hashCode() {
-		final int prime = 31;
-		int result = 1;
-		result = prime * result + ((businessProcess == null) ? 0 : businessProcess.hashCode());
-		result = prime * result + ((functionality == null) ? 0 : functionality.hashCode());
-		result = prime * result + ((variant == null) ? 0 : variant.hashCode());
-		result = prime * result + ((version == null) ? 0 : version.hashCode());
-		return result;
+		return Objects.hash(businessProcess, functionality, variant, version);
 	}
 
 	/**
-	 * @since 7.8.8
+	 * Check if this identification matches the given namespace.
+	 *
+	 * <p>This is particularly useful if this identifier is not completely filled, for example: if the business process
+	 * is set to "pain" and the functionality is set to "002" but the variant and version are left null, then this
+	 * identifier will match any namespace containing pain.002.*.* where the wildcard could be any number.
+	 * <br>new MxId("pain", "002", null, null).matches("pain.002.001.03") will be true.
+	 *
+	 * @param namespace a complete or partial namespace such as "urn:iso:std:iso:20022:tech:xsd:pain.001.001.03" or just "pain.001.001.03"
+	 * @return true if this id matches the parameter
+	 * @throws IllegalArgumentException if namespace parameter cannot be parsed as MX identification
+	 * @since 7.10.7
 	 */
-	@Override
-	public boolean equals(Object obj) {
-		if (this == obj)
-			return true;
-		if (obj == null)
-			return false;
-		if (getClass() != obj.getClass())
-			return false;
-		MxId other = (MxId) obj;
-		if (businessProcess != other.businessProcess)
-			return false;
-		if (functionality == null) {
-			if (other.functionality != null)
-				return false;
-		} else if (!functionality.equals(other.functionality))
-			return false;
-		if (variant == null) {
-			if (other.variant != null)
-				return false;
-		} else if (!variant.equals(other.variant))
-			return false;
-		if (version == null) {
-			if (other.version != null)
-				return false;
-		} else if (!version.equals(other.version))
-			return false;
-		return true;
+	public boolean matches(String namespace) {
+		return matches(new MxId(namespace));
+	}
+
+	/**
+	 * Check if this identification matches another one.
+	 *
+	 * <p>This is particularly useful if this identifier is not completely filled, for example: if the business process
+	 * is set to "pain" and the functionality is set to "002" but the variant and version are left null, then this
+	 * identifier will match for example both pain.002.001.03 and pain.002.002.04.
+	 *
+	 * <p>The difference between this implementation and {@link #equals(Object)} is that here null and empty properties
+	 * are treated as equals. Meaning it is not sensible to null versus blank properties, thus pain.001.001.null will
+	 * match pain.001.001.empty. </p>
+	 *
+	 * @param other an identification to compare
+	 * @return true if this id matches the parameter
+	 * @throws IllegalArgumentException if namespace parameter cannot be parsed as MX identification
+	 * @since 7.10.7
+	 */
+	public boolean matches(MxId other) {
+		return this.businessProcess == other.getBusinessProcess() &&
+				(StringUtils.isBlank(this.functionality) || StringUtils.isBlank(other.getFunctionality()) || StringUtils.equals(this.functionality, other.getFunctionality())) &&
+				(StringUtils.isBlank(this.variant) || StringUtils.isBlank(other.getVariant()) || StringUtils.equals(this.variant, other.getVariant())) &&
+				(StringUtils.isBlank(this.version) || StringUtils.isBlank(other.getVersion()) || StringUtils.equals(this.version, other.getVersion()));
 	}
 
 }

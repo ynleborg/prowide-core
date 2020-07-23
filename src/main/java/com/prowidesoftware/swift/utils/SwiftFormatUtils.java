@@ -1,18 +1,29 @@
-/*******************************************************************************
- * Copyright (c) 2016 Prowide Inc.
+/*
+ * Copyright 2006-2018 Prowide
  *
- *     This program is free software: you can redistribute it and/or modify
- *     it under the terms of the GNU Lesser General Public License as 
- *     published by the Free Software Foundation, either version 3 of the 
- *     License, or (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *     This program is distributed in the hope that it will be useful,
- *     but WITHOUT ANY WARRANTY; without even the implied warranty of
- *     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  
- *     
- *     Check the LGPL at <http://www.gnu.org/licenses/> for more details.
- *******************************************************************************/
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.prowidesoftware.swift.utils;
+
+import com.prowidesoftware.deprecation.DeprecationUtils;
+import com.prowidesoftware.swift.model.BIC;
+import com.prowidesoftware.swift.model.LogicalTerminalAddress;
+import com.prowidesoftware.swift.model.MIR;
+import com.prowidesoftware.swift.model.MOR;
+import com.prowidesoftware.deprecation.ProwideDeprecated;
+import com.prowidesoftware.deprecation.TargetYear;
+import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.time.DateFormatUtils;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -20,18 +31,11 @@ import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.time.Year;
 import java.util.Calendar;
 import java.util.Currency;
 import java.util.Date;
 import java.util.GregorianCalendar;
-
-import org.apache.commons.lang.StringUtils;
-import org.apache.commons.lang.time.DateFormatUtils;
-
-import com.prowidesoftware.swift.model.BIC;
-import com.prowidesoftware.swift.model.LogicalTerminalAddress;
-import com.prowidesoftware.swift.model.MIR;
-import com.prowidesoftware.swift.model.MOR;
 
 /**
  * This class provides methods to convert field components to objects.
@@ -68,7 +72,7 @@ public class SwiftFormatUtils {
 	/**
 	 * Parses a DATE2 string (accept dates in format YYMMDD) into a Calendar object.
 	 * @param strDate string to parse
-	 * @return parsed date or <code>null</code> if the argument did not matched the expected date format
+	 * @return parsed date or null if the argument did not matched the expected date format
 	 */
 	public static Calendar getDate2(final String strDate) {
 		if ((strDate != null) && (strDate.length() == 6)) {
@@ -81,7 +85,7 @@ public class SwiftFormatUtils {
 	/**
 	 * Parses a Calendar object into a DATE2 string.
 	 * @param date Calendar to parse
-	 * @return parsed date or <code>null</code> if the calendar is null
+	 * @return parsed date or null if the calendar is null
 	 */
 	public static String getDate2(final Calendar date) {
 		return getCalendar(date, "yyMMdd");
@@ -90,22 +94,21 @@ public class SwiftFormatUtils {
 	/**
 	 * Parses a DATE1 string (accept dates in format MMDD) into a Calendar object.
 	 * @param strDate string to parse
-	 * @return parsed date or <code>null</code> if the argument did not matched the expected date format
+	 * @return parsed date or null if the argument did not matched the expected date format
+	 * @see #getMonthDay(String)
 	 */
 	public static Calendar getDate1(final String strDate) {
-		if ((strDate != null) && (strDate.length() == 4)) {
-			return getCalendar(strDate, "MMdd");
-		} else {
-			return null;
-		}
+		return getMonthDay(strDate);
 	}
 
 	/**
 	 * returns true if the the current year is a leap year
 	 * @since 7.8.8
+	 * @deprecated use Year.now().isLeap() instead
 	 */
+	@ProwideDeprecated(phase2 = TargetYear.SRU2021)
 	public static final boolean isLeapYear() {
-		return Calendar.getInstance().getActualMaximum(Calendar.DAY_OF_YEAR) > 365;
+		return Year.now().isLeap();
 	}
 	
 	/**
@@ -120,19 +123,19 @@ public class SwiftFormatUtils {
 
 	/**
 	 * Parses a Calendar object into a DATE1 string.
-	 * For February 29 it will return null if current year is not a leap year
 	 * @param date Calendar to parse
-	 * @return parsed date or <code>null</code> if the calendar is null 
+	 * @return parsed date or null if the calendar is null
 	 * @since 6.4
+	 * @see #getMonthDay(Calendar)
 	 */
 	public static String getDate1(final Calendar date) {
-		return getCalendar(date, "MMdd");
+		return getMonthDay(date);
 	}
 
 	/**
 	 * Parses a DATE3 string (accept dates in format YYMM) into a Calendar object.
 	 * @param strDate string to parse
-	 * @return parsed date or <code>null</code> if the argument did not matched the expected date format
+	 * @return parsed date or null if the argument did not matched the expected date format
 	 */
 	public static Calendar getDate3(final String strDate) {
 		if ((strDate != null) && (strDate.length() == 4)) {
@@ -145,7 +148,7 @@ public class SwiftFormatUtils {
 	/**
 	 * Parses a Calendar object into a DATE1 string.
 	 * @param date Calendar to parse
-	 * @return parsed date or <code>null</code> if the calendar is null
+	 * @return parsed date or null if the calendar is null
 	 * @since 6.4
 	 */
 	public static String getDate3(final Calendar date) {
@@ -155,7 +158,7 @@ public class SwiftFormatUtils {
 	/**
 	 * Parses a DATE4 string (accept dates in format YYYYMMDD) into a Calendar object.
 	 * @param strDate string to parse
-	 * @return parsed date or <code>null</code> if the argument did not matched the expected date format
+	 * @return parsed date or null if the argument did not matched the expected date format
 	 */
 	public static Calendar getDate4(final String strDate) {
 		if ((strDate != null) && (strDate.length() == 8)) {
@@ -168,7 +171,7 @@ public class SwiftFormatUtils {
 	/**
 	 * Parses a Calendar object into a DATE1 string.
 	 * @param date Calendar to parse
-	 * @return parsed date or <code>null</code> if the calendar is null
+	 * @return parsed date or null if the calendar is null
 	 * @since 6.4
 	 */
 	public static String getDate4(final Calendar date) {
@@ -178,7 +181,7 @@ public class SwiftFormatUtils {
 	/**
 	 * Parses a YEAR string (accept dates in format YYYY) into a Calendar object.
 	 * @param strDate string to parse
-	 * @return parsed date or <code>null</code> if the argument did not matched the expected date format
+	 * @return parsed date or null if the argument did not matched the expected date format
 	 */
 	public static Calendar getYear(final String strDate) {
 		if ((strDate != null) && (strDate.length() == 4)) {
@@ -191,7 +194,7 @@ public class SwiftFormatUtils {
 	/**
 	 * Parses a Calendar object into a YYYY string.
 	 * @param date Calendar to parse
-	 * @return parsed date or <code>null</code> if the calendar is null
+	 * @return parsed date or null if the calendar is null
 	 * @since 6.4
 	 */
 	public static String getYear(final Calendar date) {
@@ -201,7 +204,7 @@ public class SwiftFormatUtils {
 	/**
 	 * Parses a value into a java Number (BigDecimal) using the comma for decimal separator.
 	 * @param amount to parse
-	 * @return Number of the parsed amount or <code>null</code> if the number could not be parsed
+	 * @return Number of the parsed amount or null if the number could not be parsed
 	 */
 	public static Number getNumber(final String amount) {
 		Number number = null;
@@ -222,12 +225,12 @@ public class SwiftFormatUtils {
 	/**
 	 * Parses a Number into a SWIFT string number ####,## with truncated zero decimals and mandatory decimal separator.
 	 * <ul>
-	 * 	<li>Example: 1234.00 -> 1234,</li>
-	 * 	<li>Example: 1234 -> 1234,</li>
-	 * 	<li>Example: 1234.56 -> 1234,56</li>
+	 * 	<li>Example: 1234.00 -&gt; 1234,</li>
+	 * 	<li>Example: 1234 -&gt; 1234,</li>
+	 * 	<li>Example: 1234.56 -&gt; 1234,56</li>
 	 * </ul>
 	 * @param number to parse
-	 * @return Number of the parsed amount or <code>null</code> if the number is null
+	 * @return Number of the parsed amount or null if the number is null
 	 */
 	public static String getNumber(final Number number) {
 		if (number != null) {
@@ -244,6 +247,8 @@ public class SwiftFormatUtils {
 	}
 
 	/**
+	 * Converts the given time into a Calendar.
+	 * Only the time information is set, the date will be the default 1/1/70
 	 * @param hhmm hour and minutes
 	 * @return a Calendar set with the given hour and minutes
 	 */
@@ -282,6 +287,8 @@ public class SwiftFormatUtils {
 	}
 
 	/**
+	 * Converts the given time into a Calendar.
+	 * Only the time information is set, the date will be the default 1/1/70
 	 * @param hhmmss hour, minutes and seconds
 	 * @return a Calendar set with the given hour, minutes and seconds
 	 */
@@ -296,7 +303,7 @@ public class SwiftFormatUtils {
 	/**
 	 * Parses a Calendar object into a TIME2 string.
 	 * @param date Calendar to parse
-	 * @return parsed time or <code>null</code> if the calendar is null
+	 * @return parsed time or null if the calendar is null
 	 * @since 6.4
 	 */
 	public static String getTime2(final Calendar date) {
@@ -304,6 +311,8 @@ public class SwiftFormatUtils {
 	}
 
 	/**
+	 * Converts the given time into a Calendar.
+	 * Only the time information is set, the date will be the default 1/1/70
 	 * @param hhmmss hour, minutes and seconds
 	 * @return a Calendar set with the given hour, or and hour and minutes
 	 */
@@ -321,7 +330,7 @@ public class SwiftFormatUtils {
 	/**
 	 * Parses a Calendar object into a TIME3 string.
 	 * @param date Calendar to parse
-	 * @return parsed time or <code>null</code> if the calendar is null
+	 * @return parsed time or null if the calendar is null
 	 * @since 6.4
 	 */
 	public static String getTime3(final Calendar date) {
@@ -351,7 +360,7 @@ public class SwiftFormatUtils {
 	/**
 	 * Parses a Calendar object into a offset string.
 	 * @param date Calendar to parse
-	 * @return parsed time or <code>null</code> if the calendar is null
+	 * @return parsed time or null if the calendar is null
 	 * @since 6.4
 	 */
 	public static String getOffset(final Calendar date) {
@@ -408,7 +417,7 @@ public class SwiftFormatUtils {
 	/**
 	 * Gets the given string as boolean.
 	 * @param string code to use where the expected values are "Y" or "N"
-	 * @return true for "Y", false for "N", and <code>null</code> otherwise
+	 * @return true for "Y", false for "N", and null otherwise
 	 * @since 7.4
 	 */
 	public static Boolean getBoolean(final String string) {
@@ -424,7 +433,7 @@ public class SwiftFormatUtils {
 	/**
 	 * Parses a Boolean object into a string.
 	 * @param bool Boolean to parse
-	 * @return parsed boolean converted to "Y" or "N" or <code>null</code> if the boolean object is null
+	 * @return parsed boolean converted to "Y" or "N" or null if the boolean object is null
 	 * @since 7.4
 	 */
 	public static String getBoolean(final Boolean bool) {
@@ -437,7 +446,7 @@ public class SwiftFormatUtils {
 	/**
 	 * Parses a DATETIME string (accepts dates with time in YYYYMMDDHHMM format) into a Calendar object.
 	 * @param strDate string to parse
-	 * @return parsed date or <code>null</code> if the argument did not matched the expected date format
+	 * @return parsed date or null if the argument did not matched the expected date format
 	 * @since 7.4
 	 */
 	public static Calendar getDateTime(final String strDate) {
@@ -451,7 +460,7 @@ public class SwiftFormatUtils {
 	/**
 	 * Parses a Calendar object into a string containing the DATETIME with YYYYMMDDHHMM format.
 	 * @param date Calendar to parse
-	 * @return parsed date or <code>null</code> if the calendar is null
+	 * @return parsed date or null if the calendar is null
 	 * @since 7.4
 	 */
 	public static String getDateTime(final Calendar date) {
@@ -461,7 +470,7 @@ public class SwiftFormatUtils {
 	/**
 	 * Parses a DATETIME with short year string (accepts dates with time in YYMMDDHHMM format) into a Calendar object.
 	 * @param strDate string to parse
-	 * @return parsed date or <code>null</code> if the argument did not matched the expected date format
+	 * @return parsed date or null if the argument did not matched the expected date format
 	 * @since 7.4
 	 */
 	public static Calendar getDateTimeShortYear(final String strDate) {
@@ -475,7 +484,7 @@ public class SwiftFormatUtils {
 	/**
 	 * Parses a Calendar object into a DATETIME with short year string in YYMMDDHHMM format.
 	 * @param date Calendar to parse
-	 * @return parsed date or <code>null</code> if the calendar is null
+	 * @return parsed date or null if the calendar is null
 	 * @since 7.4
 	 */
 	public static String getDateTimeShortYear(final Calendar date) {
@@ -485,7 +494,7 @@ public class SwiftFormatUtils {
 	/**
 	 * Parses a DAYTIME string (accepts dates with time in DDHHMM format) into a Calendar object.
 	 * @param strDate string to parse
-	 * @return parsed date or <code>null</code> if the argument did not matched the expected date format
+	 * @return parsed date or null if the argument did not matched the expected date format
 	 * @since 7.4
 	 */
 	public static Calendar getDayTime(final String strDate) {
@@ -499,7 +508,7 @@ public class SwiftFormatUtils {
 	/**
 	 * Parses a Calendar object into a string containing the DAYTIME in DDHHMM format.
 	 * @param date Calendar to parse
-	 * @return parsed date or <code>null</code> if the calendar is null
+	 * @return parsed date or null if the calendar is null
 	 * @since 7.4
 	 */
 	public static String getDayTime(final Calendar date) {
@@ -508,13 +517,17 @@ public class SwiftFormatUtils {
 
 	/**
 	 * Parses a MONTHDAY string (accepts dates in MMDD format) into a Calendar object.
+	 * <p>The year is set to the current year.
+	 * The implementation will log a warning and return null if 0229 is passed as argument and the current year is not
+	 * a leap year.
 	 * @param strDate string to parse
-	 * @return parsed date or <code>null</code> if the argument did not matched the expected date format
+	 * @return parsed date or null if the argument did not matched the expected date format
 	 * @since 7.4
 	 */
 	public static Calendar getMonthDay(final String strDate) {
 		if ((strDate != null) && (strDate.length() == 4)) {
-			return getCalendar(strDate, "MMdd");
+			String year = String.valueOf(Calendar.getInstance().get(Calendar.YEAR));
+			return getCalendar(year + strDate, "yyyyMMdd");
 		} else {
 			return null;
 		}
@@ -522,8 +535,9 @@ public class SwiftFormatUtils {
 
 	/**
 	 * Parses a Calendar object into a string containing MONTHDAY in MMDD format.
+	 * For February 29 it will return null if current year is not a leap year.
 	 * @param date Calendar to parse
-	 * @return parsed date or <code>null</code> if the calendar is null
+	 * @return parsed date or null if the calendar is null
 	 * @since 7.4
 	 */
 	public static String getMonthDay(final Calendar date) {
@@ -533,7 +547,7 @@ public class SwiftFormatUtils {
 	/**
 	 * Parses an HOUR string (accepts time in HH format) into a Calendar object.
 	 * @param strDate string to parse
-	 * @return parsed date or <code>null</code> if the argument did not matched the expected date format
+	 * @return parsed date or null if the argument did not matched the expected date format
 	 * @since 7.4
 	 */
 	public static Calendar getHour(final String strDate) {
@@ -547,7 +561,7 @@ public class SwiftFormatUtils {
 	/**
 	 * Parses a Calendar object into a string containing the HOUR in HH format.
 	 * @param date Calendar to parse
-	 * @return parsed date or <code>null</code> if the calendar is null
+	 * @return parsed date or null if the calendar is null
 	 * @since 7.4
 	 */
 	public static String getHour(final Calendar date) {
@@ -557,7 +571,7 @@ public class SwiftFormatUtils {
 	/**
 	 * Parses a string value into a MIR object.
 	 * @param value string containing the complete MIR value
-	 * @return a MIR object containing the parsed data or <code>null</code> if the argument is not a 28 length string with a proper MIR data
+	 * @return a MIR object containing the parsed data or null if the argument is not a 28 length string with a proper MIR data
 	 * @see com.prowidesoftware.swift.model.MIR
 	 */
 	public static MIR getMIR(final String value) {
@@ -571,7 +585,7 @@ public class SwiftFormatUtils {
 	/**
 	 * Parses a MIR object into a string containing its serialized data.
 	 * @param mir MIR to process
-	 * @return serialized content of the MIR object or <code>null</code> if the parameter is empty or <code>null</code>
+	 * @return serialized content of the MIR object or null if the parameter is empty or null
 	 * @since 7.4
 	 * @see MIR#getMIR()
 	 */
@@ -586,7 +600,7 @@ public class SwiftFormatUtils {
 	/**
 	 * Parses a string value into a MOR object.
 	 * @param value string containing the complete MOR value
-	 * @return a MOR object containing the parsed data or <code>null</code> if the argument is not a 28 length string with a proper MOR data
+	 * @return a MOR object containing the parsed data or null if the argument is not a 28 length string with a proper MOR data
 	 * @see com.prowidesoftware.swift.model.MOR
 	 */
 	public static MOR getMOR(final String value) {
@@ -600,7 +614,7 @@ public class SwiftFormatUtils {
 	/**
 	 * Parses a MOR object into a string containing its serialized data.
 	 * @param mor MOR to process
-	 * @return serialized content of the MOR object or <code>null</code> if the parameter is empty or <code>null</code>
+	 * @return serialized content of the MOR object or null if the parameter is empty or null
 	 * @since 7.4
 	 * @see MOR#getMOR()
 	 */
@@ -616,8 +630,12 @@ public class SwiftFormatUtils {
 	 * Tell if <code>string</code> is a valid currency code using Currency isntances from Java
 	 * @param string the string to test for a currency code
 	 * @return true if string is a valid currency code and false in other case, including null and empty
+	 * @deprecated use {@link IsoUtils#isValidISOCurrency(String)} instead
 	 */
+	@Deprecated
+	@ProwideDeprecated(phase3=TargetYear.SRU2020)
 	public static boolean isCurrency(final String string) {
+		DeprecationUtils.phase2(SwiftFormatUtils.class, "isCurrency(String)", "use IsoUtils#isValidISOCurrency(String) instead");
 		if (StringUtils.isNotBlank(string)) {
 			try {
 				return Currency.getInstance(string)!=null;
@@ -629,7 +647,7 @@ public class SwiftFormatUtils {
 	/**
 	 * Return the number of decimals for a string with a swift formatted amount.
 	 * 
-	 * @param amountString may be <code>null</code> or empty, in which case this method returns 0 
+	 * @param amountString may be null or empty, in which case this method returns 0
 	 * @return the number of digits after the last , or 0 in any other case.
 	 * @since 7.8
 	 */
@@ -642,9 +660,9 @@ public class SwiftFormatUtils {
 	}
 	
 	/**
-	 * Return the number of decimals for the given number, which can be <code>null</code>, in which case this method returns zero.
+	 * Return the number of decimals for the given number, which can be null, in which case this method returns zero.
 	 * 
-	 * @return the number of decimal in the number or zero if there are none or the amount is <code>null</code>
+	 * @return the number of decimal in the number or zero if there are none or the amount is null
 	 * @since 7.8
 	 */
 	public static int decimalsInAmount(final BigDecimal amount) {
@@ -659,7 +677,7 @@ public class SwiftFormatUtils {
 	}
 	
 	/**
-	 * @param code string with a LT identifier code (12 chars) composed by the
+	 * @param address string with a LT identifier code (12 chars) composed by the
 	 * BIC, LT identifier and branch.
 	 * @return a LT address initialized from the parameter code
 	 * @since 7.8.8
@@ -671,7 +689,7 @@ public class SwiftFormatUtils {
 	/**
 	 * Gets the code from the parameter LogicalTerminalAddress.
 	 * If the address is not complete, it will be filled with default values
-	 * using {@linkplain LogicalTerminalAddress#getSenderLogicalTerminalAddress()}
+	 * using {@link LogicalTerminalAddress#getSenderLogicalTerminalAddress()}
 	 * @param address LT address to use
 	 * @return the string with the full 12 characters long LT identifier
 	 * @since 7.8.8

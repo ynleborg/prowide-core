@@ -1,32 +1,23 @@
-/*******************************************************************************
- * Copyright (c) 2016 Prowide Inc.
+/*
+ * Copyright 2006-2018 Prowide
  *
- *     This program is free software: you can redistribute it and/or modify
- *     it under the terms of the GNU Lesser General Public License as 
- *     published by the Free Software Foundation, either version 3 of the 
- *     License, or (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *     This program is distributed in the hope that it will be useful,
- *     but WITHOUT ANY WARRANTY; without even the implied warranty of
- *     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  
- *     
- *     Check the LGPL at <http://www.gnu.org/licenses/> for more details.
- *******************************************************************************/
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.prowidesoftware.swift.model.mt;
 
-import java.io.File;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.lang.reflect.Method;
-import java.util.List;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-
-import org.apache.commons.lang.StringUtils;
-import org.apache.commons.lang.Validate;
-
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.prowidesoftware.JsonSerializable;
 import com.prowidesoftware.deprecation.DeprecationUtils;
 import com.prowidesoftware.deprecation.ProwideDeprecated;
 import com.prowidesoftware.deprecation.TargetYear;
@@ -34,51 +25,37 @@ import com.prowidesoftware.swift.io.ConversionService;
 import com.prowidesoftware.swift.io.IConversionService;
 import com.prowidesoftware.swift.io.parser.SwiftParser;
 import com.prowidesoftware.swift.io.writer.SwiftWriter;
-import com.prowidesoftware.swift.model.AbstractMessage;
-import com.prowidesoftware.swift.model.BIC;
-import com.prowidesoftware.swift.model.MessageStandardType;
-import com.prowidesoftware.swift.model.MtId;
-import com.prowidesoftware.swift.model.MtSwiftMessage;
-import com.prowidesoftware.swift.model.SwiftBlock1;
-import com.prowidesoftware.swift.model.SwiftBlock2;
-import com.prowidesoftware.swift.model.SwiftBlock2Input;
-import com.prowidesoftware.swift.model.SwiftBlock4;
-import com.prowidesoftware.swift.model.SwiftMessage;
-import com.prowidesoftware.swift.model.SwiftTagListBlock;
-import com.prowidesoftware.swift.model.Tag;
+import com.prowidesoftware.swift.model.*;
 import com.prowidesoftware.swift.model.field.Field;
 import com.prowidesoftware.swift.utils.Lib;
+import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.Validate;
+
+import java.io.*;
+import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 
 /**
- * Base class for specific MTs.<br />
+ * Base class for specific MTs.<br>
  * This class implements several high level delegate methods of SwiftMessage.
  *
  * @author www.prowidesoftware.com
  * @since 6.0
  */
-public abstract class AbstractMT extends AbstractMessage {
+public abstract class AbstractMT extends AbstractMessage implements JsonSerializable {
 	private static final transient Logger log = Logger.getLogger(AbstractMT.class.getName());
 	protected SwiftMessage m;
-	
+	private static final String GETSEQUENCE = "getSequence";
 	/**
 	 * @param m swift message to model as a particular MT
 	 */
 	public AbstractMT(SwiftMessage m) {
 		super(MessageStandardType.MT);
 		this.m = m;
-	}
-	
-	/**
-	 * @param m swift message to model as a particular MT
-	 * @deprecated use constructor from subclasses instead
-	 */
-	@Deprecated
-	@ProwideDeprecated(phase4=TargetYear._2018)	
-	public AbstractMT(MtSwiftMessage m) {
-		super(MessageStandardType.MT);
-		this.m = m.modelMessage();
-		DeprecationUtils.phase3(getClass(), "AbstractMT(MtSwiftMessage)", "Use a constructor from the specific MT subclasses instead.");
 	}
 
 	/**
@@ -94,10 +71,10 @@ public abstract class AbstractMT extends AbstractMessage {
 	}
 	
 	/**
-	 * Create an input message for the given type setting TEST BICS as sender and receiver.<br/>
-	 * All mandatory header attributes are completed with default values. 
-	 * 
-	 * @param messageType
+	 * Create an input message for the given type setting TEST BICS as sender and receiver.<br>
+	 * All mandatory header attributes are completed with default values.
+	 *
+	 * @param messageType the message type
 	 * @see #AbstractMT(int, String, String)
 	 * @since 7.6
 	 */
@@ -106,7 +83,7 @@ public abstract class AbstractMT extends AbstractMessage {
 	}
 	
 	/**
-	 * Creates a new input message for the given type setting the given sender and receiver.<br />
+	 * Creates a new input message for the given type setting the given sender and receiver.<br>
 	 * All mandatory header attributes are completed with default values. 
 	 * In particular the sender and receiver addresses will be filled with proper default LT identifier 
 	 * and branch codes if not provided. For the message type, if the indicated number is below 100 the
@@ -144,7 +121,7 @@ public abstract class AbstractMT extends AbstractMessage {
 	 * 
 	 * @param fin string a string containing a swift MT message
 	 * @return parser message or null if string content could not be parsed
-	 * @throws IOException
+	 * @throws IOException if the message content cannot be read
 	 * 
 	 * @since 7.7
 	 */
@@ -157,7 +134,7 @@ public abstract class AbstractMT extends AbstractMessage {
 	 * 
 	 * @param stream a stream containing a swift MT message
 	 * @return parser message or null if stream content could not be parsed
-	 * @throws IOException
+	 * @throws IOException if the stream content cannot be read
 	 * @see #parse(String)
 	 * 
 	 * @since 7.7
@@ -171,7 +148,7 @@ public abstract class AbstractMT extends AbstractMessage {
 	 * 
 	 * @param file a file containing a swift MT message
 	 * @return parser message or null if file content could not be parsed
-	 * @throws IOException
+	 * @throws IOException if the file content cannot be read
 	 * @see #parse(String)
 	 * 
 	 * @since 7.7
@@ -441,8 +418,8 @@ public abstract class AbstractMT extends AbstractMessage {
 	}
 
 	/**
-	 * Adds the given field to the body block.
-	 * @param f
+	 * Adds the given field to the body block in the last position
+	 * @param f a field to add
 	 */
 	public void addField(Field f) {
 		if (getSwiftMessage() == null) {
@@ -450,34 +427,15 @@ public abstract class AbstractMT extends AbstractMessage {
 		}
 		getSwiftMessage().getBlock4().append(f);
 	}
-	
-	/**
-	 * Gets a String containing the FIN message (SWIFT MT message).
-	 * 
-	 * <em>Note: This method has been replaced by <code>message()</code>
-	 * So the same method can be used for both MT and MX</em>
-	 * 
-	 * <em>This method may be deleted in 2016</em>
-	 * 
-	 * @return a string with the FIN format representation of the message
-	 * @deprecated use {@link #message()} instead of this
-	 * @see #message()
-	 */
-	@Deprecated
-	@ProwideDeprecated(phase4=TargetYear._2018)
-	public String FIN() {
-		DeprecationUtils.phase3(getClass(), "FIN()", "This method has been replaced by message() so the same method can be used for both MT and MX");
-		return message();
-	}
-	
+
 	/**
 	 * Get this message as string containing the FIN message (SWIFT MT message).
 	 * 
 	 * @return a string with the FIN format representation of the message
 	 * @since 7.7
 	 */
+	@Override
 	public String message() {
-		this.m.removeEmptyBlocks();
 		IConversionService srv = new ConversionService();
 		return srv.getFIN(this.m);
 	}
@@ -500,20 +458,20 @@ public abstract class AbstractMT extends AbstractMessage {
 	 * <em>The requested sequence must be repetitive</em> for non repetitive sequences use getSequence(name) 
 	 * 
 	 * @since 7.6
-	 * @param name
+	 * @param name the sequence alpha numeric identifier such as A1a
 	 * @return found sequences or empty list
 	 * @see #getSequence(String)
 	 */
 	@SuppressWarnings("unchecked")
 	public List<SwiftTagListBlock> getSequenceList(final String name) {
-		final String methodName = "getSequence"+name+"List";
+		final String methodName = GETSEQUENCE+name+"List";
 		Object o = invokeHere(methodName, this, null);
 		return (List<SwiftTagListBlock>)o;
 	}
 	
 	/**
 	 * Get the sequence with a given name from the given subblock
-	 * @param name the name of the sequence to get. Must not be <code>null</code>
+	 * @param name the name of the sequence to get. Must not be null
 	 * @param block the block from where to get the sequence
 	 * 
 	 * This method invokes the static version of {@link #getSequenceList(String)}
@@ -524,7 +482,7 @@ public abstract class AbstractMT extends AbstractMessage {
 	 */
 	@SuppressWarnings("unchecked")
 	public /* cant make static, but should be */ List<SwiftTagListBlock> getSequenceList(final String name, final SwiftTagListBlock block) {
-		final String methodName = "getSequence"+name+"List";
+		final String methodName = GETSEQUENCE+name+"List";
 		return (List<SwiftTagListBlock>) invokeHere(methodName, this, block);
 	}
 	
@@ -535,7 +493,7 @@ public abstract class AbstractMT extends AbstractMessage {
 	 */
 	public boolean containsSequenceList(final String name) {
 		try {
-			return getClass().getMethod("getSequence"+name+"List") != null;
+			return getClass().getMethod(GETSEQUENCE+name+"List") != null;
 		} catch (Exception e) { 
 			return false;
 		}
@@ -548,7 +506,7 @@ public abstract class AbstractMT extends AbstractMessage {
 	 */
 	public boolean containsSequence(final String name) {
 		try {
-			return getClass().getMethod("getSequence"+name) != null;
+			return getClass().getMethod(GETSEQUENCE+name) != null;
 		} catch (Exception e) {
 			return false;
 		}
@@ -556,7 +514,7 @@ public abstract class AbstractMT extends AbstractMessage {
 	
 	/**
 	 * @since 7.6
-	 * @param methodName
+	 * @param methodName a method to invoke
 	 * @return result from reflection call
 	 */
 	private Object invokeHere(final String methodName, final Object where, final SwiftTagListBlock argument) {
@@ -586,12 +544,12 @@ public abstract class AbstractMT extends AbstractMessage {
 	 *  
 	 * <em>The requested sequence must NOT be repetitive</em> for repetitive sequences use getSequenceList(name)
 	 * @since 7.6
-	 * @param name
+	 * @param name the sequence alpha numeric identifier such as A1a
 	 * @return found sequence or empty sequence block
 	 * @see #getSequenceList(String)
 	 */
 	public SwiftTagListBlock getSequence(final String name) {
-		final String methodName = "getSequence"+name;
+		final String methodName = GETSEQUENCE+name;
 		Object o = invokeHere(methodName, this, null);
 		return (SwiftTagListBlock)o;
 	}
@@ -605,7 +563,7 @@ public abstract class AbstractMT extends AbstractMessage {
 	 * @since 7.8.1
 	 */
 	public /* cant make static, but should be */ SwiftTagListBlock getSequence(final String name, final SwiftTagListBlock block) {
-		final String methodName = "getSequence"+name;
+		final String methodName = GETSEQUENCE+name;
 		Object o = invokeHere(methodName, this, block);
 		return (SwiftTagListBlock)o;
 	}
@@ -614,10 +572,42 @@ public abstract class AbstractMT extends AbstractMessage {
 	public String toString() {
 		return "AbstractMT [m=" + m + "]";
 	}
-	
+
+	/**
+	 * Sets the signature to the message
+	 *
+	 * @param signature the signature to set in block S
+	 * @return <code>this</code>
+	 * @throws IllegalStateException if the internal SwiftMessage object is null
+	 * @since 7.10.4
+	 */
+	public AbstractMT setSignature(String signature) {
+
+		// sanity check
+		if (getSwiftMessage() == null) {
+			throw new IllegalStateException("SwiftMessage was not initialized");
+		}
+
+		// set the signature
+		getSwiftMessage().setSignature(signature);
+
+		return(this);
+	}
+
+	/**
+	 * Gets the signature of the message (looks for an S block then the MDG tag)
+	 *
+	 * @return the signature of the message (or null if none exists)
+	 * @since 7.10.4
+	 */
+	public String getSignature() {
+
+		return(getSwiftMessage() != null ? getSwiftMessage().getSignature() : null);
+	}
+
 	/**
 	 * Create a blank message for the given category setting TEST bics as sender and receiver
-	 * @param messageType
+	 * @param messageType the message type
 	 * @return created message object
 	 * @see #create(int, String, String)
 	 * @since 7.6
@@ -627,9 +617,9 @@ public abstract class AbstractMT extends AbstractMessage {
 	}
 	/**
 	 * Create a blank message for the given category setting the given sender and receiver BICs
-	 * @param messageType
-	 * @param sender
-	 * @param receiver
+	 * @param messageType the message type
+	 * @param sender the sender BIC11 code
+	 * @param receiver the receiver BIC11 code
 	 * @return created message object
 	 * @since 7.6
 	 */
@@ -651,7 +641,7 @@ public abstract class AbstractMT extends AbstractMessage {
 	
 	/**
 	 * Add all tags from block to the end of the block4
-	 * @param block
+	 * @param block a block to append
 	 * @return this same object for chained calls
 	 * @since 7.6
 	 */
@@ -663,7 +653,7 @@ public abstract class AbstractMT extends AbstractMessage {
 	}
 	/**
 	 * Add all tags to the end of the block4 
-	 * @param tags
+	 * @param tags a list of tags to add
 	 * @return this same object for chained calls
 	 * @since 7.6
 	 */
@@ -678,7 +668,7 @@ public abstract class AbstractMT extends AbstractMessage {
 	}
 	/**
 	 * Add all the fields to the end of the block4
-	 * @param fields
+	 * @param fields a list of fields to add
 	 * @return this same object for chained calls
 	 * @since 7.6
 	 */
@@ -710,10 +700,8 @@ public abstract class AbstractMT extends AbstractMessage {
 	 * @since 7.7
 	 */
     protected static SwiftMessage read(String fin) {
-    	SwiftParser p = new SwiftParser(fin);
-    	p.getConfiguration().setLenient(true);
     	try {
-	        return p.message();
+	        return SwiftMessage.parse(fin);
         } catch (IOException e) {
             log.severe("An error occured while reading FIN :"+e.getClass().getName());
 			log.log(Level.SEVERE, "Read exception");
@@ -724,8 +712,10 @@ public abstract class AbstractMT extends AbstractMessage {
     
     /**
 	 * Writes the message into a file with its message content in the FIN format.
+	 * <p>The implementation ignores all empty blocks.
 	 * 
 	 * @param file a not null file to write, if it does not exists, it will be created
+	 * @throws IOException if the file cannot be written
 	 * @since 7.7
 	 */
 	public void write(File file) throws IOException {
@@ -736,8 +726,7 @@ public abstract class AbstractMT extends AbstractMessage {
 			log.fine("new file created: "+file.getAbsolutePath());
 		}
 		FileWriter fw = new FileWriter(file.getAbsoluteFile());
-		this.m.removeEmptyBlocks();
-		SwiftWriter.writeMessage(this.m, fw);
+		SwiftWriter.writeMessage(this.m, fw, true);
 		fw.close();
 	}
 	
@@ -746,6 +735,7 @@ public abstract class AbstractMT extends AbstractMessage {
 	 * encoding content in UTF-8.
 	 * 
 	 * @param stream a non null stream to write
+	 * @throws IOException if the stream cannot be written
 	 * @since 7.7
 	 */
 	public void write(OutputStream stream) throws IOException {
@@ -756,18 +746,20 @@ public abstract class AbstractMT extends AbstractMessage {
 	
 	/**
 	 * Returns the JSON representation of the SwiftMessage attribute
-	 * @see SwiftMessage#toJson()
-	 * 
-	 * @since 7.7
+	 * @deprecated use {@link #toJson()} instead
+	 * @see #toJson()
 	 */
+    @Deprecated
+    @ProwideDeprecated(phase3 = TargetYear.SRU2020)
 	public String json() {
+		DeprecationUtils.phase2(getClass(), "json()", "use toJson() instead");
 		Validate.notNull(this.m, "the message cannot be null");
 		return this.m.toJson();
 	}
 	
 	/**
-	 * Returns the message content in XML format.<br />
-	 * The XML created is the internal format defined and used by Prowide Core.<br /> 
+	 * Returns the message content in XML format.<br>
+	 * The XML created is the internal format defined and used by Prowide Core.<br>
 	 * Notice: it is neither a standard nor the MX version of this MT.
 	 * 
 	 * @since 7.7
@@ -862,4 +854,45 @@ public abstract class AbstractMT extends AbstractMessage {
 			return _m.getBlock4().getTagsByName(tagName);
 		}
 	}
+
+	/**
+	 * Get a json representation of this message with expanded fields content.
+	 * @since 7.10.3
+	 */
+	@Override
+	public String toJson() {
+		final Gson gson = new GsonBuilder()
+			.registerTypeAdapter(AbstractMT.class, new AbstractMTAdapter())
+			.setPrettyPrinting()
+			.create();
+		return gson.toJson(this,AbstractMT.class);
+	}
+
+	/**
+	 * This method deserializes the JSON data into a specific MT object.
+	 * @param json a JSON representation of an MT message
+	 * @return a specific deserialized MT message object, for example MT103
+	 * @since 7.10.3
+	 */
+	public static AbstractMT fromJson(String json) {
+		final Gson gson = new GsonBuilder()
+				.registerTypeAdapter(AbstractMT.class, new AbstractMTAdapter())
+				.registerTypeAdapter(SwiftBlock2.class, new SwiftBlock2Adapter())
+				.create();
+		return gson.fromJson(json, AbstractMT.class);
+	}
+
+	/**
+	 * Gets the block 4 complete ordered list of fields
+	 * @return return a list of Tag as a FieldNN instance or empty list if non is found
+	 * @since 7.10.3
+	 */
+	public List<Field> getFields() {
+		List<Field> fields = new ArrayList<>();
+		for (Tag tag : this.m.getBlock4().getTags()){
+			fields.add(tag.asField());
+		}
+		return fields;
+	}
+
 }
